@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  COACH
+  ADMIN
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  fullName           String
+  passwordHash       String
+  role               UserRole            @default(STUDENT)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  progress           Progress[]
+  quizAttempts       QuizAttempt[]
+  scenarioResponses  ScenarioResponse[]
+}
+
+model Course {
+  id           String     @id @default(uuid())
+  title        String
+  description  String
+  level        CourseLevel @default(BEGINNER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  modules      Module[]
+}
+
+model Module {
+  id           String       @id @default(uuid())
+  title        String
+  content      String
+  videoUrl     String?
+  orderIndex   Int
+  courseId     String
+  course       Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  quizzes      Quiz[]
+  progress     Progress[]
+  scenarios    Scenario[]
+}
+
+model Quiz {
+  id           String        @id @default(uuid())
+  question     String
+  options      String[]
+  correctIndex Int
+  moduleId     String
+  module       Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  attempts     QuizAttempt[]
+}
+
+model QuizAttempt {
+  id         String   @id @default(uuid())
+  score      Int
+  userId     String
+  quizId     String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model Progress {
+  id            String   @id @default(uuid())
+  userId        String
+  moduleId      String
+  completed     Boolean  @default(false)
+  completedAt   DateTime?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module        Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+}
+
+// Scenario practice models
+model Scenario {
+  id                  String              @id @default(uuid())
+  title               String
+  problemStatement    String
+  coachingMaterials   String?
+  difficulty          DifficultyLevel     @default(BEGINNER)
+  moduleId            String
+  module              Module              @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  rubrics             Rubric[]
+  responses           ScenarioResponse[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+}
+
+model Rubric {
+  id           String              @id @default(uuid())
+  name         String              // "IMPACT", "FORMULARE FINALĂ", etc
+  description  String              // Evaluation criteria
+  scenarioId   String
+  scenario     Scenario            @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  scores       RubricScore[]
+  createdAt    DateTime            @default(now())
+}
+
+model ScenarioResponse {
+  id              String              @id @default(uuid())
+  userId          String
+  scenarioId      String
+  response        String              // Student's answer
+  aiEvaluation    String?             // AI-generated feedback
+  overallScore    Int?                // 0-100
+  isGraded        Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenario        Scenario            @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  rubricScores    RubricScore[]
+
+  @@unique([userId, scenarioId])
+}
+
+model RubricScore {
+  id                  String              @id @default(uuid())
+  rubricId            String
+  responseId          String
+  score               Int                 // 0-100 per rubric
+  feedback            String              // AI feedback for this rubric
+  rubric              Rubric              @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  response           ScenarioResponse    @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  
+  @@unique([rubricId, responseId])
+}

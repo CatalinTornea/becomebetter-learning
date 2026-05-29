@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: becomebetter-api
+    runtime: node
+    buildCommand: npm install && cd apps/api && npm run build && npx prisma generate
+    startCommand: cd apps/api && node dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: becomebetter-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: API_PORT
+        value: 10000
+
+databases:
+  - name: becomebetter-db
+    databaseName: becomebetter
+    user: becomebetter

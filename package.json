@@ -1,0 +1,21 @@
+{
+  "name": "adaptiveops-learning-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @adaptiveops/web\" \"npm run dev -w @adaptiveops/api\"",
+    "build": "npm run build -w @adaptiveops/shared && npm run build -w @adaptiveops/api && npm run build -w @adaptiveops/web",
+    "lint": "npm run lint -w @adaptiveops/web && npm run lint -w @adaptiveops/api",
+    "test": "npm run test -w @adaptiveops/api && npm run test -w @adaptiveops/web",
+    "prisma:generate": "npm run prisma:generate -w @adaptiveops/api",
+    "prisma:migrate": "npm run prisma:migrate -w @adaptiveops/api",
+    "prisma:seed": "npm run prisma:seed -w @adaptiveops/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

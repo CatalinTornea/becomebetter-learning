@@ -1,0 +1,1 @@
+-- Initial schema managed by Prisma migrations during runtime.
