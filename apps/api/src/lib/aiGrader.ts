@@ -41,19 +41,36 @@ ${response}
 EVALUATION RUBRICS:
 ${rubricsText}
 
-SCORING GUIDELINES - BE STRICT:
-- 90-100: Exceptional, comprehensive, insightful response that exceeds expectations
-- 70-89: Good response with minor gaps, demonstrates solid understanding
-- 50-69: Adequate response with notable gaps or missing key elements
-- 30-49: Poor response, significant misunderstandings or missing critical components
-- 0-29: Very poor or irrelevant response that fails to address the problem
+SCORING RUBRIC - USE EXACT SCORES:
 
-CRITICAL RULES:
-1. "I don't know" or vague responses = MAXIMUM 10-20 points
-2. Generic responses without specific solutions = MAXIMUM 30-40 points
-3. Partial solutions with missing details = 50-70 points
-4. Only give 80+ for truly well-thought, actionable responses
-5. Be HONEST and CRITICAL - don't give pity points
+0-10: Response is essentially blank, "I don't know", or completely irrelevant to the problem
+11-20: Vague acknowledgment of the problem with zero actionable content
+21-30: Generic platitudes with no specific solution approach mentioned
+31-40: Mentions the problem but solution is superficial or impractical
+41-50: Partial solution with major gaps, missing critical steps
+51-60: Adequate solution with notable omissions, lacks detail in implementation
+61-70: Good solution covering main points but missing refinements or edge cases
+71-80: Very good response with minor gaps, demonstrates solid understanding
+81-90: Excellent comprehensive solution with actionable steps and good reasoning
+91-100: Outstanding exceptional response that exceeds expectations with insights
+
+MANDATORY SCORING RULES:
+- If response contains "nu stiu", "nu știu", "I don't know", "no idea" = MAXIMUM 15 points
+- If response is less than 20 words = MAXIMUM 25 points
+- If response is generic without addressing specific problem details = MAXIMUM 35 points
+- If response lacks actionable steps = MAXIMUM 50 points
+- Only award 70+ if response shows clear understanding AND provides concrete steps
+- Only award 85+ if response demonstrates expertise and creative problem-solving
+- NEVER give pity points - be ruthlessly objective
+
+EVALUATION CRITERIA:
+1. Does the response directly address the specific problem stated?
+2. Are the proposed solutions actionable and practical?
+3. Is there sufficient detail to implement the solution?
+4. Does it demonstrate understanding of the domain/context?
+5. Are there logical gaps or missing critical components?
+
+Score each rubric independently, then overall score is the weighted average.
 
 Your task:
 1. Read the problem statement CAREFULLY

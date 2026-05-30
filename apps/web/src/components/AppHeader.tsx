@@ -10,9 +10,12 @@ type StoredUser = {
   role: "STUDENT" | "COACH" | "ADMIN";
 };
 
-const links = [
+const publicLinks = [
   { href: "/auth/login", label: "Login" },
-  { href: "/auth/signup", label: "Cont nou" },
+  { href: "/auth/signup", label: "Cont nou" }
+];
+
+const privateLinks = [
   { href: "/dashboard", label: "Cursuri" },
   { href: "/practice", label: "Practica" },
   { href: "/progress", label: "Analiza" }
@@ -66,7 +69,14 @@ export function AppHeader() {
         </Link>
         <div className="site-header__right">
           <nav className="site-nav" aria-label="Navigatie principala">
-            {links.map((link) => (
+            {!user
+              ? publicLinks.map((link) => (
+                  <Link key={link.href} href={link.href}>
+                    {link.label}
+                  </Link>
+                ))
+              : null}
+            {privateLinks.map((link) => (
               <Link key={link.href} href={link.href}>
                 {link.label}
               </Link>
@@ -80,9 +90,14 @@ export function AppHeader() {
                 <span>{user.role === "ADMIN" ? "Admin" : "Cursant"}</span>
               </div>
               {user.role === "ADMIN" ? (
-                <Link className="admin-link" href="/admin">
-                  Administrare
-                </Link>
+                <>
+                  <Link className="admin-link" href="/admin">
+                    Administrare
+                  </Link>
+                  <Link className="admin-link" href="/admin/scores">
+                    Scoruri Studenti
+                  </Link>
+                </>
               ) : null}
               <button className="logout-btn" type="button" onClick={logout}>
                 Logout

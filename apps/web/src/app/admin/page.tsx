@@ -305,6 +305,11 @@ export default function AdminPage() {
           <h1>Administrare Become better.</h1>
           <p>Doar contul admin poate adauga, edita sau sterge cursuri si scenarii de practica.</p>
         </div>
+        <div className="hero-actions">
+          <a href="/admin/scores" className="button">
+            📊 Vezi Scoruri Studenti
+          </a>
+        </div>
       </div>
 
       {message ? <p className={`message ${messageType ?? ""}`}>{message}</p> : null}
@@ -346,19 +351,32 @@ export default function AdminPage() {
       </div>
 
       <div className="card">
-        <h2>Scenarii de practica</h2>
+        <h2>Selecteaza modulul pentru editare</h2>
         <div className="form-grid">
-          <select value={selectedCourseId} onChange={(event) => setSelectedCourseId(event.target.value)}>
-            <option value="">Alege cursul</option>
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>{course.title}</option>
-            ))}
-          </select>
-          <select value={selectedModuleId} onChange={(event) => setSelectedModuleId(event.target.value)} disabled={!selectedCourse?.modules.length}>
+          <select
+            value={selectedModuleId}
+            onChange={(event) => {
+              const moduleId = event.target.value;
+              if (moduleId) {
+                const course = courses.find((c) => c.modules.some((m) => m.id === moduleId));
+                if (course) {
+                  setSelectedCourseId(course.id);
+                  setSelectedModuleId(moduleId);
+                }
+              } else {
+                setSelectedCourseId("");
+                setSelectedModuleId("");
+              }
+            }}
+          >
             <option value="">Alege modulul</option>
-            {selectedCourse?.modules.map((module) => (
-              <option key={module.id} value={module.id}>{module.title}</option>
-            ))}
+            {courses.map((course) =>
+              course.modules.map((module) => (
+                <option key={module.id} value={module.id}>
+                  {course.title} - {module.title}
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { authRoutes } from "./routes/authRoutes.js";
 import { courseRoutes } from "./routes/courseRoutes.js";
 import { progressRoutes } from "./routes/progressRoutes.js";
 import { scenarioRoutes } from "./routes/scenarioRoutes.js";
+import { adminRoutes } from "./routes/adminRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
@@ -23,5 +24,6 @@ app.use("/auth", authRoutes);
 app.use("/courses", courseRoutes);
 app.use("/progress", progressRoutes);
 app.use("/scenarios", scenarioRoutes);
+app.use("/admin", adminRoutes);
 
 app.use(errorHandler);

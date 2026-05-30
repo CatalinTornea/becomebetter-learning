@@ -106,6 +106,7 @@ select:focus {
 
 .app-shell {
   min-height: 100vh;
+  padding-top: 80px;
 }
 
 .container {
@@ -116,11 +117,13 @@ select:focus {
 
 .site-header {
   backdrop-filter: blur(18px);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   border-bottom: 1px solid rgba(203, 213, 225, 0.78);
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  left: 0;
+  right: 0;
+  z-index: 1000;
 }
 
 .site-header__inner {
@@ -735,8 +738,12 @@ select:focus {
 }
 
 @media (max-width: 860px) {
+  .app-shell {
+    padding-top: 140px;
+  }
+
   .container {
-    padding: 18px;
+    padding: 12px;
   }
 
   .site-header__inner,
@@ -749,11 +756,31 @@ select:focus {
 
   .site-header__inner {
     align-items: flex-start;
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .brand {
+    font-size: 15px;
+  }
+
+  .brand-mark {
+    height: 28px;
+    width: 28px;
+    font-size: 11px;
   }
 
   .site-nav {
     justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .site-nav a {
+    font-size: 13px;
+    padding: 6px 8px;
   }
 
   .site-header__right,
@@ -764,7 +791,18 @@ select:focus {
   }
 
   .user-menu {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    gap: 8px;
+  }
+
+  .user-menu strong {
+    font-size: 12px;
+  }
+
+  .user-menu span {
+    font-size: 10px;
   }
 
   .page-hero h1,
