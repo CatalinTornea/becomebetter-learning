@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret";
+import { getAccessTokenFromRequest } from "../lib/authCookies.js";
+import { JWT_SECRET } from "../lib/env.js";
 
 type JwtPayload = {
   sub: string;
@@ -11,13 +11,13 @@ type JwtPayload = {
 };
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+  const token = getAccessTokenFromRequest(req);
+  if (!token) {
     return res.status(401).json({ message: "Missing token" });
   }
 
   try {
-    const payload = jwt.verify(header.replace("Bearer ", ""), JWT_SECRET) as JwtPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     req.user = {
       id: payload.sub,
       email: payload.email,

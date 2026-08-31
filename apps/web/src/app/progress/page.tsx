@@ -1,82 +1,96 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiGet } from "../../lib/api";
 
-type ProgressRow = {
+type ScenarioResponse = {
   id: string;
-  completed: boolean;
-  module: {
+  scenario: {
+    id: string;
     title: string;
-    course: { title: string };
+    course: {
+      id: string;
+      title: string;
+    };
   };
+  overallScore: number | null;
+  isGraded: boolean;
+  response: string;
+  gradedAt: string;
+  createdAt: string;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
 export default function ProgressPage() {
-  const [items, setItems] = useState<ProgressRow[]>([]);
+  const [responses, setResponses] = useState<ScenarioResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      setError("Te rugam sa te autentifici.");
-      return;
-    }
-    fetch(`${API_URL}/progress`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Nu am putut incarca progresul.");
-        const payload = (await response.json()) as ProgressRow[];
-        setItems(payload);
+    apiGet<ScenarioResponse[]>("/scenarios/responses")
+      .then((payload) => {
+        setResponses(payload);
       })
       .catch((fetchError) => {
         setError(fetchError instanceof Error ? fetchError.message : "Eroare necunoscuta.");
       });
   }, []);
 
-  const completed = items.filter((item) => item.completed).length;
-  const percent = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
+  const graded = responses.filter((r) => r.isGraded).length;
+  const averageScore = responses.filter(r => r.overallScore !== null).length > 0 
+    ? Math.round(responses.filter(r => r.overallScore !== null).reduce((sum, r) => sum + (r.overallScore || 0), 0) / responses.filter(r => r.overallScore !== null).length)
+    : 0;
 
   return (
     <section className="page-stack">
       <div className="page-hero">
         <div>
           <p className="course-meta">Analiza</p>
-          <h1>Progresul tau pe module.</h1>
-          <p>Urmareste ce ai finalizat si unde merita sa revii pentru consolidare.</p>
+          <h1>Scenariile tale de practica.</h1>
+          <p>Urmareste raspunsurile trimise si scorurile obtinute la evaluarea AI.</p>
         </div>
         <div className="stats-strip">
           <div className="stat">
-            <strong>{completed}</strong>
-            <span>Finalizate</span>
+            <strong>{graded}</strong>
+            <span>Evaluate</span>
           </div>
           <div className="stat">
-            <strong>{items.length}</strong>
+            <strong>{responses.length}</strong>
             <span>Total</span>
           </div>
           <div className="stat">
-            <strong>{percent}%</strong>
-            <span>Completare</span>
+            <strong>{averageScore}</strong>
+            <span>Scor mediu</span>
           </div>
         </div>
       </div>
 
       <div className="card">
-        <h2>Module urmarite</h2>
+        <h2>Raspunsuri la scenarii</h2>
         {error ? <p className="message error">{error}</p> : null}
-        {!error && items.length === 0 ? <div className="empty-state">Nu exista progres inregistrat inca.</div> : null}
+        {!error && responses.length === 0 ? <div className="empty-state">Nu ai trimis inca niciun raspuns la scenarii de practica.</div> : null}
         <div className="progress-list">
-          {items.map((item) => (
-            <div className="progress-row" key={item.id}>
+          {responses.map((response) => (
+            <div className="progress-row" key={response.id}>
               <div>
-                <strong>{item.module.course.title}</strong>
-                <p className="muted">{item.module.title}</p>
+                <strong>{response.scenario.title}</strong>
+                <p className="muted">{response.scenario.course.title}</p>
+                <p className="muted" style={{ fontSize: "12px" }}>
+                  {new Date(response.createdAt).toLocaleDateString("ro-RO")}
+                </p>
               </div>
-              <span className={`status-pill ${item.completed ? "done" : "todo"}`}>
-                {item.completed ? "Finalizat" : "In lucru"}
-              </span>
+              <div style={{ textAlign: "right" }}>
+                {response.isGraded ? (
+                  <>
+                    <span className={`status-pill done`}>
+                      {response.overallScore ?? 0}/100
+                    </span>
+                    <p className="muted" style={{ fontSize: "11px", marginTop: "4px" }}>
+                      Evaluat: {new Date(response.gradedAt).toLocaleDateString("ro-RO")}
+                    </p>
+                  </>
+                ) : (
+                  <span className="status-pill todo">In evaluare</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

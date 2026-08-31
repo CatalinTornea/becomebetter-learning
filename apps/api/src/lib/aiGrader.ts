@@ -1,10 +1,24 @@
+import { config } from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from multiple paths
+config({ path: join(__dirname, "../../../../.env") });
+config({ path: join(__dirname, "../../../.env") });
+config();
+
 import Groq from "groq-sdk";
 
+const apiKey = process.env.GROQ_API_KEY || "";
+
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey,
 });
 
-console.log("[AI Grader] GROQ_API_KEY loaded:", process.env.GROQ_API_KEY ? "YES" : "NO - KEY IS MISSING!");
+console.log("[AI Grader] GROQ_API_KEY loaded:", apiKey ? "YES" : "NO - KEY IS MISSING!");
 
 export interface RubricEvaluation {
   name: string;
@@ -28,95 +42,107 @@ export async function gradeScenarioResponse(
     .map((r) => `- ${r.name}: ${r.description}`)
     .join("\n");
 
-  const prompt = `You are a STRICT and OBJECTIVE expert coach evaluating a student's response to a problem-solving scenario.
+  const prompt = `Ești un Master Coach expert STRICT, RIGUROS și PRECIS specializat în METODOLOGIA PDCA TOYOTA KATA (Gândire Științifică și Experimentare Rapidă).
+Evaluarea ta trebuie să fie extrem de obiectivă, verificând respectarea riguroasă a celor 4 faze ale Fișei de Experimente PDCA Kata (PLAN, DO, CHECK, ACT) și penalizând greșelile comune de gândire.
 
-PROBLEM STATEMENT:
+TOATE feedback-urile și explicațiile oferite studentului trebuie scrise OBLIGATORIU ÎN LIMBA ROMÂNĂ.
+
+CONTEXTUL METODOLOGIC TOYOTA KATA PDCA:
+1. P (PLAN):
+   - Obstacol (CE?): Descrie clar UNDE și CUM se pierde ceva în proces față de Starea Țintă (ex: "Pierdem timp...", "Pierdem calitate..."). NU trebuie să fie o soluție mascată ("nu avem senzor X") sau o concluzie pripită!
+   - Cauză (CARE?): Analiză "du-te și vezi" (Go & See) a cauzei rădăcină. Nu încurca obstacolul cu cauza!
+   - Pasul Următor: Pas mic, rapid, specific (pentru azi/mâine). Trebuie încadrat în una din cele 3 tipologii de pas:
+     1) "Du-te și vezi" (observare și colectare date fără a schimba nimic);
+     2) "Experiment explorator" (introducerea unei schimbări pentru a vedea cum reacționează procesul);
+     3) "Testarea unei ipoteze" (introducerea unei schimbări, ideal un singur factor, cu o predicție precisă).
+   - Așteptări (Predicție): Ce rezultat cuantificabil se așteaptă (# pași reduși, # mișcări, timp în secunde, # defecte). Predicția se formulează ÎNAINTE de experiment!
+2. D (DO):
+   - Execuție pe un orizont scurt (cicluri zilnice). Urmărirea observațiilor fără a întrerupe procesul.
+3. C (CHECK):
+   - Rezultat observat direct (fapte văzute, nu opinii sau presupuneri). Comparație mecanică 1:1 între Așteptări (Predicție) și Rezultatul Real.
+4. A (ACT / LEARNING):
+   - Ce am învățat? Rezultatul neașteptat NU este un eșec, ci "informație utilă" (useful information). Confirmat -> standardizare. Neconfirmat -> nouă ipoteză.
+
+CELE 7 GREȘELI COMUNE PE CARE TREBUIE SĂ LE PENALIZEZI:
+1. Sare la soluții (propune direct o acțiune/echipament fără obstacol real -> cauză -> predicție -> experiment).
+2. Pași prea mari (proiect de săptămâni/luni mascat ca "experiment").
+3. Predicție reconstruită ulterior (scrie rezultatul apoi adaptează predicția).
+4. Confundă opinia cu observația (raportează păreri în loc de fapte văzute direct).
+5. Ignoră surprizele (trece peste un rezultat neașteptat în loc să învețe).
+6. Rezolvă mai multe obstacole deodată (amestecă mai multe schimbări simultan).
+7. Nu închide ciclul (trece la pasul următor fără Check/Act).
+
+SITUAȚIA DE REZOLVAT (SCENARIUL):
 ${problemStatement}
 
-${coachingMaterials ? `COACHING MATERIALS & CONTEXT:\n${coachingMaterials}\n` : ""}
+${coachingMaterials ? `MATERIALE DE COACHING ȘI CONTEXT PDCA:\n${coachingMaterials}\n` : ""}
 
-STUDENT'S RESPONSE:
+RĂSPUNSUL STUDENTULUI:
 ${response}
 
-EVALUATION RUBRICS:
+CRITERII DE EVALUARE (RUBRICI PDCA):
 ${rubricsText}
 
-SCORING RUBRIC - USE EXACT SCORES:
+GRILĂ STRICTĂ DE PUNCTARE TOYOTA KATA (0-100):
+- 0-20: Sare direct la soluții, răspuns gol sau ignoră complet metodologia PDCA.
+- 21-40: Menționează vag PDCA dar face greșeli majore (pași uriași, lipsă predicție cuantificabilă, opinii în loc de observații).
+- 41-60: Respectă structura generală PDCA dar amestecă cauzele cu obstacolele sau lipsește o comparație 1:1 între așteptări și rezultat.
+- 61-80: Aplică corect PDCA cu pași mici și predicție numerică, dar are mici scăpări în rigoarea observației directe sau analiza învățării.
+- 81-100: Răspuns excepțional de gândire științifică PDCA Kata: obstacol precis, cauză "du-te și vezi", tipologie clară de pas, predicție 1:1 exactă și analiză profundă a învățării (useful information).
 
-0-10: Response is essentially blank, "I don't know", or completely irrelevant to the problem
-11-20: Vague acknowledgment of the problem with zero actionable content
-21-30: Generic platitudes with no specific solution approach mentioned
-31-40: Mentions the problem but solution is superficial or impractical
-41-50: Partial solution with major gaps, missing critical steps
-51-60: Adequate solution with notable omissions, lacks detail in implementation
-61-70: Good solution covering main points but missing refinements or edge cases
-71-80: Very good response with minor gaps, demonstrates solid understanding
-81-90: Excellent comprehensive solution with actionable steps and good reasoning
-91-100: Outstanding exceptional response that exceeds expectations with insights
-
-MANDATORY SCORING RULES:
-- If response contains "nu stiu", "nu știu", "I don't know", "no idea" = MAXIMUM 15 points
-- If response is less than 20 words = MAXIMUM 25 points
-- If response is generic without addressing specific problem details = MAXIMUM 35 points
-- If response lacks actionable steps = MAXIMUM 50 points
-- Only award 70+ if response shows clear understanding AND provides concrete steps
-- Only award 85+ if response demonstrates expertise and creative problem-solving
-- NEVER give pity points - be ruthlessly objective
-
-EVALUATION CRITERIA:
-1. Does the response directly address the specific problem stated?
-2. Are the proposed solutions actionable and practical?
-3. Is there sufficient detail to implement the solution?
-4. Does it demonstrate understanding of the domain/context?
-5. Are there logical gaps or missing critical components?
-
-Score each rubric independently, then overall score is the weighted average.
-
-Your task:
-1. Read the problem statement CAREFULLY
-2. Evaluate if the response actually addresses the specific problem
-3. Check if the solution is actionable and practical
-4. Score based on STRICT criteria above
-5. Provide constructive but honest feedback
-
-Respond in JSON format ONLY (no markdown, no extra text):
+Răspunde DOAR în format JSON valid:
 {
-  "overallScore": <number 0-100>,
+  "overallScore": <număr între 0 și 100>,
   "rubricEvaluations": [
     {
-      "name": "<rubric name>",
-      "score": <number 0-100>,
-      "feedback": "<specific, honest feedback explaining why points were deducted>"
+      "name": "<numele criteriului exact>",
+      "score": <număr între 0 și 100>,
+      "feedback": "<feedback obiectiv în limba română evidențiind punctele forte PDCA și greșelile specifice comise (ex: sărit la soluții, predicție lipsă)>"
     }
   ],
-  "generalFeedback": "<honest overall assessment with specific improvement recommendations>"
+  "generalFeedback": "<evaluare sintetică a gândirii științifice PDCA Kata, cu indicații clare pentru următorul ciclu de experimentare în limba română>"
 }`;
 
-  try {
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: "llama-3.1-8b-instant",
-      response_format: { type: "json_object" },
-    });
+  const modelsToTry = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "groq/compound",
+    "qwen/qwen3.6-27b",
+    "llama-3.3-70b-versatile",
+  ];
 
-    const responseText = chatCompletion.choices[0]?.message?.content || "";
+  let lastError: any = null;
 
-    // Extract JSON from response
-    let jsonStr = responseText;
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0];
+  for (const modelName of modelsToTry) {
+    try {
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        model: modelName,
+        response_format: { type: "json_object" },
+      });
+
+      const responseText = chatCompletion.choices[0]?.message?.content || "";
+
+      // Extract JSON from response
+      let jsonStr = responseText;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      }
+
+      const result = JSON.parse(jsonStr) as AIGradingResult;
+      return result;
+    } catch (error) {
+      console.warn(`[AI Grader] Model ${modelName} failed:`, error instanceof Error ? error.message : error);
+      lastError = error;
     }
-
-    const result = JSON.parse(jsonStr) as AIGradingResult;
-    return result;
-  } catch (error) {
-    console.error("AI Grading error:", error);
-    throw new Error("Failed to grade response with AI");
   }
+
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Eroare evaluare AI (Groq API): ${detail}`);
 }

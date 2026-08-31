@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-
-type StoredUser = {
-  fullName: string;
-  email: string;
-  role: "STUDENT" | "COACH" | "ADMIN";
-};
+import {
+  AuthUser,
+  clearCachedUser,
+  fetchCurrentUser,
+  getCachedUser,
+  logout as logoutRequest
+} from "../lib/auth";
 
 const publicLinks = [
   { href: "/auth/login", label: "Login" },
@@ -17,95 +18,141 @@ const publicLinks = [
 
 const privateLinks = [
   { href: "/dashboard", label: "Cursuri" },
-  { href: "/practice", label: "Practica" },
-  { href: "/progress", label: "Analiza" }
+  { href: "/practice", label: "Practică" },
+  { href: "/progress", label: "Analiză" }
 ];
 
 export function AppHeader() {
   const router = useRouter();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const pathname = usePathname();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    function syncUser() {
-      const stored = localStorage.getItem("user");
-      if (!stored) {
-        setUser(null);
-        return;
-      }
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
+  useEffect(() => {
+    async function syncUser() {
+      const cached = getCachedUser();
+      if (cached) setUser(cached);
       try {
-        setUser(JSON.parse(stored) as StoredUser);
+        const currentUser = await fetchCurrentUser();
+        setUser(currentUser);
       } catch {
-        localStorage.removeItem("user");
+        clearCachedUser();
         setUser(null);
       }
     }
 
-    syncUser();
-    window.addEventListener("auth-changed", syncUser);
-    window.addEventListener("storage", syncUser);
+    const handleAuthChanged = () => { void syncUser(); };
+    const handleStorage = () => { setUser(getCachedUser()); };
+
+    void syncUser();
+    window.addEventListener("auth-changed", handleAuthChanged);
+    window.addEventListener("storage", handleStorage);
+
     return () => {
-      window.removeEventListener("auth-changed", syncUser);
-      window.removeEventListener("storage", syncUser);
+      window.removeEventListener("auth-changed", handleAuthChanged);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
-  function logout() {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setUser(null);
-    window.dispatchEvent(new Event("auth-changed"));
-    router.push("/auth/login");
+  async function logout() {
+    try {
+      await logoutRequest();
+    } finally {
+      setUser(null);
+      window.dispatchEvent(new Event("auth-changed"));
+      router.push("/auth/login");
+    }
   }
 
-  return (
-    <header className="site-header">
-      <div className="container site-header__inner">
-        <Link className="brand" href="/dashboard">
-          <span className="brand-mark">BB</span>
-          <span>Become better</span>
-        </Link>
-        <div className="site-header__right">
-          <nav className="site-nav" aria-label="Navigatie principala">
-            {!user
-              ? publicLinks.map((link) => (
-                  <Link key={link.href} href={link.href}>
-                    {link.label}
-                  </Link>
-                ))
-              : null}
-            {privateLinks.map((link) => (
-              <Link key={link.href} href={link.href}>
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-          {user ? (
-            <div className="user-menu">
-              <div>
-                <strong>{user.fullName}</strong>
-                <span>{user.role === "ADMIN" ? "Admin" : "Cursant"}</span>
+  return (
+    <>
+      <header className="site-header" data-scrolled={scrolled}>
+        <div className="site-header__inner">
+          <Link className="brand" href="/dashboard">
+            <span className="brand-mark">BB</span>
+            <span>Become Better</span>
+          </Link>
+
+          <div className="site-header__right">
+            <nav className="site-nav" aria-label="Navigatie principala">
+              {!user
+                ? publicLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={isActive(link.href) ? "nav-active" : ""}
+                    >
+                      {link.label}
+                    </Link>
+                  ))
+                : null}
+              {user
+                ? privateLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={isActive(link.href) ? "nav-active" : ""}
+                    >
+                      {link.label}
+                    </Link>
+                  ))
+                : null}
+            </nav>
+
+            {user ? (
+              <div className="user-menu">
+                <div className="user-info">
+                  <strong>{user.fullName}</strong>
+                  <span>{user.role === "ADMIN" ? "Admin" : "Cursant"}</span>
+                </div>
+                {user.role === "ADMIN" ? (
+                  <>
+                    <Link className="admin-link" href="/admin">Administrare</Link>
+                    <Link className="admin-link" href="/admin/scores">Scoruri</Link>
+                  </>
+                ) : null}
+                <button className="logout-btn" type="button" onClick={() => void logout()}>
+                  Logout
+                </button>
               </div>
-              {user.role === "ADMIN" ? (
-                <>
-                  <Link className="admin-link" href="/admin">
-                    Administrare
-                  </Link>
-                  <Link className="admin-link" href="/admin/scores">
-                    Scoruri Studenti
-                  </Link>
-                </>
-              ) : null}
-              <button className="logout-btn" type="button" onClick={logout}>
-                Logout
-              </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <style>{`
+        .site-header[data-scrolled="true"] {
+          background: rgba(255, 255, 255, 0.97);
+          box-shadow: 0 1px 0 rgba(124, 58, 237, 0.10), 0 4px 24px rgba(124, 58, 237, 0.08);
+        }
+        .site-nav a {
+          color: #4b5563;
+        }
+        .site-nav a:hover {
+          color: var(--primary);
+        }
+        .site-nav a.nav-active {
+          color: var(--primary);
+          background: var(--primary-soft);
+          border-color: var(--border-strong);
+          font-weight: 700;
+        }
+        .brand span:last-child {
+          color: var(--ink);
+        }
+        .user-info {
+          display: flex;
+          flex-direction: column;
+        }
+      `}</style>
+    </>
   );
 }

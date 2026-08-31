@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { apiGet } from '../lib/api';
 
 interface Scenario {
   id: string;
   title: string;
-  difficulty: string;
 }
 
 export function ScenarioList({ moduleId }: { moduleId: string }) {
@@ -17,14 +17,7 @@ export function ScenarioList({ moduleId }: { moduleId: string }) {
   useEffect(() => {
     const fetchScenarios = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const res = await fetch(`${apiUrl}/scenarios/module/${moduleId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (!res.ok) throw new Error('Failed to load scenarios');
-        const data = await res.json();
+        const data = await apiGet<Scenario[]>(`/scenarios/course/${moduleId}`);
         setScenarios(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading scenarios');
@@ -46,9 +39,6 @@ export function ScenarioList({ moduleId }: { moduleId: string }) {
         <Link key={scenario.id} href={`/scenarios/${scenario.id}`}>
           <div className="card scenario-card">
             <h3>{scenario.title}</h3>
-            <span className={`difficulty ${scenario.difficulty.toLowerCase()}`}>
-              {scenario.difficulty}
-            </span>
           </div>
         </Link>
       ))}

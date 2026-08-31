@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
+import { apiGet, apiJson } from "../lib/api";
 
 interface RubricItem {
   id: string;
@@ -14,7 +15,6 @@ interface Scenario {
   title: string;
   problemStatement: string;
   coachingMaterials: string | null;
-  difficulty: string;
   rubrics: RubricItem[];
 }
 
@@ -28,10 +28,6 @@ interface ScenarioFeedback {
   overallScore: number;
   rubricEvaluations: RubricEvaluation[];
   generalFeedback: string;
-}
-
-function getAccessToken() {
-  return localStorage.getItem("accessToken") ?? localStorage.getItem("token");
 }
 
 export function PracticeScenario({ scenarioId }: { scenarioId: string }) {
@@ -50,22 +46,8 @@ export function PracticeScenario({ scenarioId }: { scenarioId: string }) {
     try {
       setLoading(true);
       setError(null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const token = getAccessToken();
 
-      if (!token) {
-        setError("Te rugam sa te autentifici inainte sa deschizi scenariul.");
-        return;
-      }
-
-      const res = await fetch(`${apiUrl}/scenarios/${scenarioId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!res.ok) throw new Error("Scenariul nu a putut fi incarcat.");
-      const data = await res.json();
+      const data = await apiGet<Scenario>(`/scenarios/${scenarioId}`);
       setScenario(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Eroare la incarcarea scenariului");
@@ -84,23 +66,15 @@ export function PracticeScenario({ scenarioId }: { scenarioId: string }) {
     try {
       setSubmitting(true);
       setError(null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const token = getAccessToken();
 
-      const res = await fetch(`${apiUrl}/scenarios/submit`, {
+      const result = await apiJson<{ grading: ScenarioFeedback }>("/scenarios/submit", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           scenarioId,
           response
         })
       });
 
-      if (!res.ok) throw new Error("Raspunsul nu a putut fi trimis pentru evaluare.");
-      const result = await res.json();
       setFeedback(result.grading);
       setResponse("");
     } catch (err) {
@@ -123,12 +97,7 @@ export function PracticeScenario({ scenarioId }: { scenarioId: string }) {
   return (
     <div className="practice-container">
       <aside className="practice-left">
-        <div className="card">
-          <p className="course-meta">Dificultate</p>
-          <span className={`difficulty-badge ${scenario.difficulty.toLowerCase()}`}>
-            {scenario.difficulty}
-          </span>
-        </div>
+        {/* difficulty removed */}
 
         {scenario.coachingMaterials ? (
           <div className="coaching-section">
@@ -150,9 +119,9 @@ export function PracticeScenario({ scenarioId }: { scenarioId: string }) {
           {scenario.rubrics.length > 0 ? (
             <div className="rubrics-section">
               <h3>Criterii de evaluare</h3>
-              {scenario.rubrics.map((rubric) => (
+              {scenario.rubrics.map((rubric, index) => (
                 <div key={rubric.id} className="rubric-item">
-                  <strong>{rubric.name}</strong>
+                  <strong>{index + 1}. {rubric.name}</strong>
                   <p>{rubric.description}</p>
                 </div>
               ))}
@@ -184,10 +153,10 @@ export function PracticeScenario({ scenarioId }: { scenarioId: string }) {
 
             <div className="rubric-feedback">
               <h4>Feedback detaliat</h4>
-              {feedback.rubricEvaluations.map((evaluation) => (
-                <div key={evaluation.name} className="rubric-feedback-item">
+              {feedback.rubricEvaluations.map((evaluation, index) => (
+                <div key={`${evaluation.name}-${index}`} className="rubric-feedback-item">
                   <div className="rubric-header">
-                    <strong>{evaluation.name}</strong>
+                    <strong>{index + 1}. {evaluation.name}</strong>
                     <span className="score">{evaluation.score}/100</span>
                   </div>
                   <p>{evaluation.feedback}</p>

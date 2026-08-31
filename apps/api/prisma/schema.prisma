@@ -13,16 +13,11 @@ enum UserRole {
   ADMIN
 }
 
-enum CourseLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-}
+// Removed CourseLevel and DifficultyLevel enums per request
 
-enum DifficultyLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
+enum ScenarioVisibility {
+  PUBLIC
+  PRIVATE
 }
 
 model User {
@@ -33,75 +28,48 @@ model User {
   role               UserRole            @default(STUDENT)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  progress           Progress[]
-  quizAttempts       QuizAttempt[]
   scenarioResponses  ScenarioResponse[]
+  ownedScenarios     Scenario[]
 }
 
 model Course {
-  id           String     @id @default(uuid())
-  title        String
-  description  String
-  level        CourseLevel @default(BEGINNER)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  modules      Module[]
+  id                   String     @id @default(uuid())
+  title                String
+  description          String
+  theory               String?
+  // level field removed per request
+  showAdminScenarios   Boolean    @default(true)
+  evaluationCriteria   Json?
+  attachments          CourseAttachment[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  scenarios            Scenario[]
 }
 
-model Module {
-  id           String       @id @default(uuid())
-  title        String
-  content      String
-  videoUrl     String?
-  orderIndex   Int
+model CourseAttachment {
+  id           String   @id @default(uuid())
   courseId     String
-  course       Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  quizzes      Quiz[]
-  progress     Progress[]
-  scenarios    Scenario[]
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  mime         String
+  size         Int
+  url          String
+  createdAt    DateTime @default(now())
 }
 
-model Quiz {
-  id           String        @id @default(uuid())
-  question     String
-  options      String[]
-  correctIndex Int
-  moduleId     String
-  module       Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  attempts     QuizAttempt[]
-}
-
-model QuizAttempt {
-  id         String   @id @default(uuid())
-  score      Int
-  userId     String
-  quizId     String
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
-}
-
-model Progress {
-  id            String   @id @default(uuid())
-  userId        String
-  moduleId      String
-  completed     Boolean  @default(false)
-  completedAt   DateTime?
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  module        Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, moduleId])
-}
-
-// Scenario practice models
+// Scenario practice models - linked directly to Course
 model Scenario {
   id                  String              @id @default(uuid())
   title               String
   problemStatement    String
   coachingMaterials   String?
-  difficulty          DifficultyLevel     @default(BEGINNER)
-  moduleId            String
-  module              Module              @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  // difficulty field removed per request
+  courseId            String
+  course              Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  ownerId             String?
+  owner               User?               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  visibility          ScenarioVisibility  @default(PUBLIC)
   rubrics             Rubric[]
   responses           ScenarioResponse[]
   createdAt           DateTime            @default(now())

@@ -2,10 +2,14 @@ import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import {
+  clearAuthCookies,
+  getRefreshTokenFromRequest,
+  setAccessTokenCookie,
+  setAuthCookies
+} from "../lib/authCookies.js";
+import { JWT_REFRESH_SECRET, JWT_SECRET } from "../lib/env.js";
 import { prisma } from "../lib/prisma.js";
-
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "dev-refresh-secret";
 
 const signUpSchema = z.object({
   email: z.string().email(),
@@ -32,6 +36,10 @@ function issueTokens(user: { id: string; email: string; fullName: string; role: 
   return { accessToken, refreshToken };
 }
 
+function publicUser(user: { id: string; email: string; fullName: string; role: AuthRole }) {
+  return { id: user.id, email: user.email, fullName: user.fullName, role: user.role };
+}
+
 export async function signUp(req: Request, res: Response) {
   const payload = signUpSchema.safeParse(req.body);
   if (!payload.success) {
@@ -52,10 +60,10 @@ export async function signUp(req: Request, res: Response) {
     }
   });
 
-  return res.status(201).json({
-    user: { id: created.id, email: created.email, fullName: created.fullName, role: created.role },
-    ...issueTokens({ id: created.id, email: created.email, fullName: created.fullName, role: created.role })
-  });
+  const user = publicUser(created);
+  setAuthCookies(res, issueTokens(user));
+
+  return res.status(201).json({ user });
 }
 
 export async function login(req: Request, res: Response) {
@@ -74,14 +82,14 @@ export async function login(req: Request, res: Response) {
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  return res.json({
-    user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
-    ...issueTokens({ id: user.id, email: user.email, fullName: user.fullName, role: user.role })
-  });
+  const publicUserData = publicUser(user);
+  setAuthCookies(res, issueTokens(publicUserData));
+
+  return res.json({ user: publicUserData });
 }
 
 export async function refresh(req: Request, res: Response) {
-  const token = req.body?.refreshToken as string | undefined;
+  const token = getRefreshTokenFromRequest(req);
   if (!token) {
     return res.status(400).json({ message: "Missing refresh token" });
   }
@@ -92,13 +100,29 @@ export async function refresh(req: Request, res: Response) {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    const publicUserData = publicUser(user);
     const accessToken = jwt.sign(
       { sub: user.id, email: user.email, fullName: user.fullName, role: user.role },
       JWT_SECRET,
       { expiresIn: "30m" }
     );
-    return res.json({ accessToken });
+    setAccessTokenCookie(res, accessToken);
+    return res.json({ user: publicUserData });
   } catch (_error) {
     return res.status(401).json({ message: "Invalid refresh token" });
   }
+}
+
+export async function logout(_req: Request, res: Response) {
+  clearAuthCookies(res);
+  return res.json({ message: "Logged out" });
+}
+
+export async function me(req: Request, res: Response) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  return res.json({ user: req.user });
 }

@@ -1,8 +1,12 @@
 import { Router } from "express";
-import { login, refresh, signUp } from "../controllers/authController.js";
+import { login, logout, me, refresh, signUp } from "../controllers/authController.js";
+import { requireAuth } from "../middleware/auth.js";
+import { authRateLimit } from "../middleware/rateLimit.js";
 
 export const authRoutes = Router();
 
-authRoutes.post("/signup", signUp);
-authRoutes.post("/login", login);
-authRoutes.post("/refresh", refresh);
+authRoutes.post("/signup", authRateLimit, signUp);
+authRoutes.post("/login", authRateLimit, login);
+authRoutes.post("/refresh", authRateLimit, refresh);
+authRoutes.post("/logout", logout);
+authRoutes.get("/me", requireAuth, me);

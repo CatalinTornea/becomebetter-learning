@@ -17,14 +17,10 @@ export async function getAllStudentScores(req: Request, res: Response) {
         },
         scenario: {
           include: {
-            module: {
-              include: {
-                course: {
-                  select: {
-                    id: true,
-                    title: true,
-                  },
-                },
+            course: {
+              select: {
+                id: true,
+                title: true,
               },
             },
           },
@@ -54,19 +50,15 @@ export async function getAllStudentScores(req: Request, res: Response) {
       scenario: {
         id: resp.scenario.id,
         title: resp.scenario.title,
-        difficulty: resp.scenario.difficulty,
+        difficulty: (resp.scenario as any).difficulty,
       },
       course: {
-        id: resp.scenario.module.course.id,
-        title: resp.scenario.module.course.title,
-      },
-      module: {
-        id: resp.scenario.module.id,
-        title: resp.scenario.module.title,
+        id: resp.scenario.course.id,
+        title: resp.scenario.course.title,
       },
       overallScore: resp.overallScore,
       aiEvaluation: resp.aiEvaluation,
-      response: resp.response.substring(0, 200) + (resp.response.length > 200 ? "..." : ""),
+      response: resp.response,
       rubricScores: resp.rubricScores.map((rs) => ({
         rubricName: rs.rubric.name,
         score: rs.score,
