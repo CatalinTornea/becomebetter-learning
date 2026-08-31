@@ -18,12 +18,8 @@ const allowedOrigins = getFrontendOrigins();
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(null, false);
+      // Allow all origins dynamically (echoes requesting origin header with credentials)
+      callback(null, true);
     },
     credentials: true
   })
