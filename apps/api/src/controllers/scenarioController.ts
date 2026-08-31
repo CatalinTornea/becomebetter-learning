@@ -140,10 +140,10 @@ export async function createUserScenario(req: Request, res: Response) {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    const inheritedRubrics = course.scenarios.flatMap((scenario) => scenario.rubrics ?? []);
+    const inheritedRubrics = course.scenarios.flatMap((scenario: { rubrics?: any[] }) => scenario.rubrics ?? []);
     const uniqueRubrics = Array.from(
-      new Map(
-        inheritedRubrics.map((rubric) => [`${rubric.name}:${rubric.description}`, rubric])
+      new Map<string, { name: string; description: string }>(
+        inheritedRubrics.map((rubric: { name: string; description: string }) => [`${rubric.name}:${rubric.description}`, rubric])
       ).values()
     );
 
@@ -156,7 +156,7 @@ export async function createUserScenario(req: Request, res: Response) {
     // 2. Existing coachingMaterials from admin scenarios of the course
     // 3. Fallback to course.theory or course.description
     const existingCoachingMaterials = course.scenarios.find(
-      (s) => s.coachingMaterials && s.coachingMaterials.trim().length > 0
+      (s: { coachingMaterials?: string | null }) => s.coachingMaterials && s.coachingMaterials.trim().length > 0
     )?.coachingMaterials;
 
     const coachingMaterialsToSave =
@@ -173,7 +173,7 @@ export async function createUserScenario(req: Request, res: Response) {
         ownerId: req.user.id,
         visibility: "PRIVATE",
         rubrics: {
-          create: uniqueRubrics.map((rubric) => ({
+          create: uniqueRubrics.map((rubric: { name: string; description: string }) => ({
             name: rubric.name,
             description: rubric.description,
           })),
@@ -232,7 +232,7 @@ export async function submitScenarioResponse(req: Request, res: Response) {
     const gradingResult = await gradeScenarioResponse(
       response,
       scenario.problemStatement,
-      scenario.rubrics.map((r) => ({
+      scenario.rubrics.map((r: { name: string; description: string }) => ({
         name: r.name,
         description: r.description,
       })),
@@ -241,7 +241,7 @@ export async function submitScenarioResponse(req: Request, res: Response) {
 
     // Save rubric scores
     for (const rubricEval of gradingResult.rubricEvaluations) {
-      const rubric = scenario.rubrics.find((r) => r.name === rubricEval.name);
+      const rubric = scenario.rubrics.find((r: { name: string }) => r.name === rubricEval.name);
       if (rubric) {
         await prisma.rubricScore.upsert({
           where: {
