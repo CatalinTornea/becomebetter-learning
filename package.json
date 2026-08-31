@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "npm run start -w @adaptiveops/api",
     "dev": "concurrently \"npm run dev -w @adaptiveops/web\" \"npm run dev -w @adaptiveops/api\"",
     "build": "npm run build -w @adaptiveops/shared && npm run build -w @adaptiveops/api && npm run build -w @adaptiveops/web",
     "lint": "npm run lint -w @adaptiveops/web && npm run lint -w @adaptiveops/api",
