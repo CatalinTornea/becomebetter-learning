@@ -1,6 +1,6 @@
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || "Become Better <onboarding@resend.dev>";
+  const apiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
+  const fromEmail = process.env.EMAIL_FROM || "onboarding@resend.dev";
 
   const subject = "Resetare parolă Become Better";
   const htmlContent = `
@@ -22,6 +22,8 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
     </div>
   `;
 
+  console.log(`[Mailer] Initiating reset email for: ${email}. RESEND_API_KEY detected: ${Boolean(apiKey)}`);
+
   if (apiKey) {
     try {
       const response = await fetch("https://api.resend.com/emails", {
@@ -38,12 +40,12 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
         })
       });
 
+      const resText = await response.text();
       if (!response.ok) {
-        const errText = await response.text();
-        console.error("[Mailer] Resend API error:", response.status, errText);
+        console.error("[Mailer] Resend API error status:", response.status, "Response:", resText);
         return false;
       }
-      console.log(`[Mailer] Password reset email sent to ${email} via Resend.`);
+      console.log(`[Mailer] Password reset email successfully sent via Resend to ${email}. Response:`, resText);
       return true;
     } catch (err) {
       console.error("[Mailer] Error sending email via Resend:", err);
@@ -53,7 +55,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
 
   // Fallback mode for development/testing when no RESEND_API_KEY is provided
   console.log("--------------------------------------------------");
-  console.log(`[Mailer] SIMULATED EMAIL SENT TO: ${email}`);
+  console.log(`[Mailer] NO RESEND_API_KEY FOUND IN ENV. SIMULATED RESET URL FOR ${email}:`);
   console.log(`[Mailer] RESET URL: ${resetUrl}`);
   console.log("--------------------------------------------------");
   return true;
