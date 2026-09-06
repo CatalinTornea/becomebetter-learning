@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import crypto from "crypto";
 import {
   clearAuthCookies,
   getRefreshTokenFromRequest,
@@ -10,6 +11,7 @@ import {
 } from "../lib/authCookies.js";
 import { JWT_REFRESH_SECRET, JWT_SECRET } from "../lib/env.js";
 import { prisma } from "../lib/prisma.js";
+import { sendPasswordResetEmail } from "../lib/mailer.js";
 
 const signUpSchema = z.object({
   email: z.string().email(),
@@ -125,4 +127,77 @@ export async function me(req: Request, res: Response) {
   }
 
   return res.json({ user: req.user });
+}
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(10),
+  password: z.string().min(6)
+});
+
+export async function forgotPassword(req: Request, res: Response) {
+  const payload = forgotPasswordSchema.safeParse(req.body);
+  if (!payload.success) {
+    return res.status(400).json({ message: "Adresă de email invalidă." });
+  }
+
+  const { email } = payload.data;
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user) {
+    return res.json({ message: "Dacă adresa de email există în sistem, ai primit un link de resetare." });
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expires = new Date(Date.now() + 3600000);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      resetToken: token,
+      resetTokenExpires: expires
+    }
+  });
+
+  const webUrl = process.env.APP_WEB_URL || process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:3000";
+  const resetUrl = `${webUrl}/auth/reset-password?token=${token}`;
+
+  await sendPasswordResetEmail(user.email, resetUrl);
+
+  return res.json({ message: "Dacă adresa de email există în sistem, ai primit un link de resetare." });
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  const payload = resetPasswordSchema.safeParse(req.body);
+  if (!payload.success) {
+    return res.status(400).json({ message: "Date invalide. Parola trebuie să aibă minim 6 caractere." });
+  }
+
+  const { token, password } = payload.data;
+  const user = await prisma.user.findFirst({
+    where: {
+      resetToken: token,
+      resetTokenExpires: { gt: new Date() }
+    }
+  });
+
+  if (!user) {
+    return res.status(400).json({ message: "Link-ul de resetare este invalid sau a expirat." });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      resetToken: null,
+      resetTokenExpires: null
+    }
+  });
+
+  return res.json({ message: "Parola a fost schimbată cu succes! Te poți conecta acum." });
 }

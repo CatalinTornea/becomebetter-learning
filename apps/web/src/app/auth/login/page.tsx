@@ -105,7 +105,12 @@ export default function LoginPage() {
             />
           </div>
           <div className="input-group">
-            <label className="input-label" htmlFor="login-password">Parolă</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <label className="input-label" htmlFor="login-password" style={{ margin: 0 }}>Parolă</label>
+              <Link href="/auth/forgot-password" style={{ fontSize: "13px", color: "var(--primary)", textDecoration: "none", fontWeight: 500 }}>
+                Ai uitat parola?
+              </Link>
+            </div>
             <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <input
                 id="login-password"
