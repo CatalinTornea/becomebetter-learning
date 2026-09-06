@@ -214,10 +214,13 @@ export default function AdminPage() {
     setShowAdminScenarios(course.showAdminScenarios);
     setCourseCriteriaGroups(
       (course.evaluationCriteria && course.evaluationCriteria.length > 0)
-        ? course.evaluationCriteria.map((group) => ({
-            title: group.title,
-            items: group.items.length > 0 ? group.items : [""]
-          }))
+        ? (course.evaluationCriteria as any[]).map((group) => {
+            const title = group.title || group.name || "";
+            const items = Array.isArray(group.items) && group.items.length > 0
+              ? group.items
+              : (group.description ? [group.description] : [""]);
+            return { title, items };
+          })
         : [{ title: "Obstacole", items: [""] }]
     );
     setAttachments(null);

@@ -44,13 +44,28 @@ export default function CoursePage({ params }: Props) {
   const [previewLoadError, setPreviewLoadError] = useState(false);
   const scenarios = Array.isArray(course?.scenarios) ? course.scenarios : [];
   const attachments = Array.isArray(course?.attachments) ? course.attachments : [];
-  const evaluationCriteria = Array.isArray(course?.evaluationCriteria)
-    ? course.evaluationCriteria
-        .map((group) => ({
-          title: group?.title || "Criteriu",
-          items: Array.isArray(group?.items) ? group.items.filter(Boolean) : []
-        }))
-        .filter((group) => group.title || group.items.length > 0)
+  const evaluationCriteria: EvaluationCriteriaGroup[] = Array.isArray(course?.evaluationCriteria)
+    ? (course.evaluationCriteria as any[])
+        .map((group) => {
+          if (!group) return null;
+          if (typeof group === "string") {
+            return { title: "", items: [group.trim()] };
+          }
+          const title = (group.title || group.name || "").trim();
+          let items: string[] = [];
+          if (Array.isArray(group.items)) {
+            items = group.items.map((i: any) => (typeof i === "string" ? i.trim() : String(i))).filter(Boolean);
+          }
+          if (items.length === 0 && group.description && typeof group.description === "string") {
+            items = [group.description.trim()];
+          }
+          if (!title && items.length === 0) return null;
+          return {
+            title: title || "Criteriu de evaluare",
+            items
+          };
+        })
+        .filter((g): g is EvaluationCriteriaGroup => g !== null && (g.title.length > 0 || g.items.length > 0))
     : [];
 
   useEffect(() => {
@@ -179,12 +194,16 @@ export default function CoursePage({ params }: Props) {
             <div style={{ display: "grid", gap: "16px" }}>
               {evaluationCriteria.map((group, groupIndex) => (
                 <div key={`${group.title}-${groupIndex}`}>
-                  <h3 style={{ margin: "0 0 8px", fontSize: "18px", color: "#0f172a" }}>{group.title}</h3>
-                  <ul style={{ margin: 0, paddingLeft: "22px" }}>
-                    {group.items.map((item, itemIndex) => (
-                      <li key={`${group.title}-${itemIndex}`} style={{ marginBottom: "6px" }}>{item}</li>
-                    ))}
-                  </ul>
+                  {group.title ? (
+                    <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#0f172a", fontWeight: 600 }}>{group.title}</h3>
+                  ) : null}
+                  {group.items.length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: "22px" }}>
+                      {group.items.map((item, itemIndex) => (
+                        <li key={`${group.title}-${itemIndex}`} style={{ marginBottom: "6px" }}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
               ))}
             </div>

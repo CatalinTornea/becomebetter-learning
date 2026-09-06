@@ -142,7 +142,10 @@ Spre deosebire de PDCA-ul clasic care pornește de la o problemă și caută o s
       description:
         "Stăpânește metodologia PDCA Toyota Kata pentru rezolvarea științifică a problemelor în procese industriale și operaționale.\n\n## Ce vei învăța:\n- Formularea riguroasă a Obstacolelor și Cauzelor fără a sări la soluții\n- Clasificarea celor 3 tipuri de pas (Du-te și vezi, Explorator, Testare Ipoteză)\n- Formularea predicțiilor cuantificabile 1:1 înainte de execuție\n- Analiza faptelor observate direct și extragerea 'informațiilor utile' (useful information)\n- Evitarea celor 7 greșeli comune de experimentare\n\n## Format:\n- Ghid teoretic exhaustiv PDCA Kata\n- Scenarii de simulare din producție reală\n- Feedback AI riguros bazat pe criteriile Toyota Kata",
       theory: courseTheoryText,
-      evaluationCriteria: pdcaRubrics,
+      evaluationCriteria: pdcaRubrics.map((r) => ({
+        title: r.name,
+        items: [r.description],
+      })),
     },
   });
 

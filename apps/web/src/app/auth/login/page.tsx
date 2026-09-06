@@ -130,29 +130,7 @@ export default function LoginPage() {
           <Link href="/auth/signup">Creează cont gratuit</Link>
         </p>
 
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-plain)" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-muted)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Autentificare rapidă Demo:
-          </p>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button
-              type="button"
-              className="secondary-btn"
-              style={{ flex: 1, fontSize: 12, padding: "8px" }}
-              onClick={() => { setEmail("admin@becomebetter.ro"); setPassword("admin1234"); }}
-            >
-              👑 Admin Demo
-            </button>
-            <button
-              type="button"
-              className="secondary-btn"
-              style={{ flex: 1, fontSize: 12, padding: "8px" }}
-              onClick={() => { setEmail("student@becomebetter.ro"); setPassword("student1234"); }}
-            >
-              🎓 Student Demo
-            </button>
-          </div>
-        </div>
+
       </div>
 
       <style>{`
