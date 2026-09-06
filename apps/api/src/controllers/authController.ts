@@ -148,8 +148,11 @@ export async function forgotPassword(req: Request, res: Response) {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
+    console.log(`[ForgotPassword] No user found in DB for email: ${email}`);
     return res.json({ message: "Dacă adresa de email există în sistem, ai primit un link de resetare." });
   }
+
+  console.log(`[ForgotPassword] User found (${user.email}). Generating reset token...`);
 
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 3600000);
