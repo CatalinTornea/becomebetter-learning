@@ -1,5 +1,6 @@
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
+  const brevoApiKey = process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.trim() : null;
+  const resendApiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
   const fromEmail = process.env.EMAIL_FROM || "onboarding@resend.dev";
 
   const subject = "Resetare parolă Become Better";
@@ -22,14 +23,46 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
     </div>
   `;
 
-  console.log(`[Mailer] Initiating reset email for: ${email}. RESEND_API_KEY detected: ${Boolean(apiKey)}`);
+  console.log(`[Mailer] Initiating reset email for: ${email}. Brevo API: ${Boolean(brevoApiKey)}, Resend API: ${Boolean(resendApiKey)}`);
 
-  if (apiKey) {
+  // Option 1: Brevo API (No custom domain required! Can send to ANY email address in the world)
+  if (brevoApiKey) {
+    try {
+      const senderEmail = process.env.EMAIL_FROM || "catalintornea24@gmail.com";
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": brevoApiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          sender: { name: "Become Better", email: senderEmail },
+          to: [{ email: email }],
+          subject: subject,
+          htmlContent: htmlContent
+        })
+      });
+
+      const resText = await response.text();
+      if (!response.ok) {
+        console.error("[Mailer] Brevo API error status:", response.status, "Response:", resText);
+        return false;
+      }
+      console.log(`[Mailer] Password reset email successfully sent via Brevo to ${email}. Response:`, resText);
+      return true;
+    } catch (err) {
+      console.error("[Mailer] Error sending email via Brevo:", err);
+      return false;
+    }
+  }
+
+  // Option 2: Resend API
+  if (resendApiKey) {
     try {
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${resendApiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -53,9 +86,9 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
     }
   }
 
-  // Fallback mode for development/testing when no RESEND_API_KEY is provided
+  // Fallback mode for development/testing when no API key is provided
   console.log("--------------------------------------------------");
-  console.log(`[Mailer] NO RESEND_API_KEY FOUND IN ENV. SIMULATED RESET URL FOR ${email}:`);
+  console.log(`[Mailer] NO API KEY FOUND IN ENV. SIMULATED RESET URL FOR ${email}:`);
   console.log(`[Mailer] RESET URL: ${resetUrl}`);
   console.log("--------------------------------------------------");
   return true;
