@@ -144,8 +144,12 @@ export async function forgotPassword(req: Request, res: Response) {
     return res.status(400).json({ message: "Adresă de email invalidă." });
   }
 
-  const { email } = payload.data;
-  const user = await prisma.user.findUnique({ where: { email } });
+  const email = payload.data.email.toLowerCase().trim();
+  const user = await prisma.user.findFirst({
+    where: {
+      email: { equals: email, mode: "insensitive" }
+    }
+  });
 
   if (!user) {
     console.log(`[ForgotPassword] No user found in DB for email: ${email}`);
@@ -203,4 +207,21 @@ export async function resetPassword(req: Request, res: Response) {
   });
 
   return res.json({ message: "Parola a fost schimbată cu succes! Te poți conecta acum." });
+}
+
+export async function testEmail(req: Request, res: Response) {
+  const targetEmail = String(req.query.email || "catalintornea24@gmail.com").toLowerCase().trim();
+  const testUrl = "https://becomebetterweb.vercel.app/auth/reset-password?token=test-token-123456";
+
+  const brevoApiKey = process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.trim() : null;
+  const resendApiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
+
+  const success = await sendPasswordResetEmail(targetEmail, testUrl);
+  return res.json({
+    targetEmail,
+    success,
+    brevoKeyDetected: Boolean(brevoApiKey),
+    resendKeyDetected: Boolean(resendApiKey),
+    emailFromConfigured: process.env.EMAIL_FROM || null
+  });
 }
