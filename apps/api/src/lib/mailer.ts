@@ -1,7 +1,20 @@
+function parseEmailFrom(raw?: string | null): { name: string; email: string } {
+  if (!raw || !raw.trim()) {
+    return { name: "Become Better", email: "catalintornea24@gmail.com" };
+  }
+  const match = raw.trim().match(/^(?:([^<]+)<)?([^>]+)>?$/);
+  if (match && match[2]) {
+    const name = (match[1] || "").trim() || "Become Better";
+    const email = match[2].trim();
+    return { name, email };
+  }
+  return { name: "Become Better", email: raw.trim() };
+}
+
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<boolean> {
   const brevoApiKey = process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.trim() : null;
   const resendApiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
-  const fromEmail = process.env.EMAIL_FROM || "onboarding@resend.dev";
+  const rawFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
 
   const subject = "Resetare parolă Become Better";
   const htmlContent = `
@@ -28,7 +41,9 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
   // Option 1: Brevo API (No custom domain required! Can send to ANY email address in the world)
   if (brevoApiKey) {
     try {
-      const senderEmail = process.env.EMAIL_FROM || "catalintornea24@gmail.com";
+      const senderObj = parseEmailFrom(process.env.EMAIL_FROM || "catalintornea24@gmail.com");
+      console.log("[Mailer] Using Brevo sender:", senderObj);
+
       const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
@@ -36,7 +51,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          sender: { name: "Become Better", email: senderEmail },
+          sender: senderObj,
           to: [{ email: email }],
           subject: subject,
           htmlContent: htmlContent
@@ -66,7 +81,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          from: fromEmail,
+          from: rawFrom,
           to: [email],
           subject: subject,
           html: htmlContent
