@@ -3,20 +3,25 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiJson } from "../lib/api";
+import { AuthUser, cacheUser, notifyAuthChanged } from "../lib/auth";
 
 export default function HomePage() {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
 
   const [currentView, setCurrentView] = useState<"login" | "register" | "recover">("login");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [statusHidden, setStatusHidden] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // IntersectionObserver for scroll animations
+  // IntersectionObserver for scroll animations & URL query auth modal auto-open
   useEffect(() => {
     const items = document.querySelectorAll(".reveal");
     if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -35,14 +40,31 @@ export default function HomePage() {
         item.classList.add("will-reveal");
         observer.observe(item);
       });
-      return () => observer.disconnect();
     }
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const authParam = params.get("auth");
+      if (authParam === "login" || authParam === "register" || authParam === "recover") {
+        openAuthDialog(authParam);
+      }
+    }
+
+    const handleOpenAuth = (e: Event) => {
+      const custom = e as CustomEvent<"login" | "register" | "recover">;
+      if (custom.detail) {
+        openAuthDialog(custom.detail);
+      }
+    };
+    window.addEventListener("open-auth", handleOpenAuth);
+    return () => window.removeEventListener("open-auth", handleOpenAuth);
   }, []);
 
   const openAuthDialog = (view: "login" | "register" | "recover" = "login") => {
     setCurrentView(view);
     setStatusHidden(true);
     setStatusMessage("");
+    setIsError(false);
     setPassword("");
     setConfirmPassword("");
     if (dialogRef.current) {
@@ -60,37 +82,72 @@ export default function HomePage() {
 
   const views = {
     login: { title: "Autentificare", subtitle: "Conectează-te pentru a continua.", submit: "Intră în platformă" },
-    register: { title: "Creează cont", subtitle: "Începe practica în Lean & Toyota KATA Dojo.", submit: "Creează cont gratuit" },
+    register: { title: "Creează cont", subtitle: "Începe practica în Better Through Practice.", submit: "Creează cont gratuit" },
     recover: { title: "Recuperare parolă", subtitle: "Introdu adresa de email asociată contului.", submit: "Trimite linkul de resetare" },
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentView === "register" && password !== confirmPassword) {
+    setLoading(true);
+    setStatusHidden(true);
+    setStatusMessage("");
+    setIsError(false);
+
+    try {
+      if (currentView === "register") {
+        if (password !== confirmPassword) {
+          setIsError(true);
+          setStatusMessage("Parolele nu coincid. Repetă aceeași parolă.");
+          setStatusHidden(false);
+          setLoading(false);
+          return;
+        }
+
+        const payload = await apiJson<{ user: AuthUser }>("/auth/signup", {
+          method: "POST",
+          body: JSON.stringify({ fullName, email, password })
+        });
+
+        cacheUser(payload.user);
+        notifyAuthChanged();
+        closeAuthDialog();
+        router.push("/dashboard");
+        return;
+      }
+
+      if (currentView === "login") {
+        const payload = await apiJson<{ user: AuthUser }>("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password })
+        });
+
+        cacheUser(payload.user);
+        notifyAuthChanged();
+        closeAuthDialog();
+        router.push("/dashboard");
+        return;
+      }
+
+      if (currentView === "recover") {
+        try {
+          await apiJson("/auth/forgot-password", {
+            method: "POST",
+            body: JSON.stringify({ email })
+          });
+        } catch {
+          // Handled gracefully
+        }
+        setIsError(false);
+        setStatusMessage("Dacă adresa de email există în sistem, a fost trimis un link de resetare.");
+        setStatusHidden(false);
+      }
+    } catch (err) {
+      setIsError(true);
+      setStatusMessage(err instanceof Error ? err.message : "A apărut o eroare la autentificare.");
       setStatusHidden(false);
-      setStatusMessage("Parolele nu coincid. Repetă aceeași parolă.");
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    if (currentView === "login") {
-      router.push("/auth/login");
-      return;
-    } else if (currentView === "register") {
-      router.push("/auth/signup");
-      return;
-    }
-
-    const messages = {
-      login: "Formular verificat. Se direcționează către platformă...",
-      register: "Formular verificat. Se direcționează către crearea contului...",
-      recover: "Formular verificat. Recuperarea parolei necesită conectarea la un serviciu securizat. Nu a fost trimis niciun email.",
-    };
-
-    setPassword("");
-    setConfirmPassword("");
-    setShowPassword(false);
-    setStatusHidden(false);
-    setStatusMessage(messages[currentView]);
   };
 
   return (
@@ -284,14 +341,31 @@ export default function HomePage() {
           </div>
 
           <form id="auth-form" onSubmit={handleSubmit}>
+            {currentView === "register" ? (
+              <div className="auth-field">
+                <div className="label-row"><label htmlFor="auth-name">Nume complet</label></div>
+                <input
+                  className="auth-input"
+                  id="auth-name"
+                  type="text"
+                  placeholder="Ion Ionescu"
+                  autoComplete="name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  minLength={3}
+                />
+              </div>
+            ) : null}
+
             <div className="auth-field">
               <div className="label-row"><label htmlFor="auth-email">Email</label></div>
               <input
                 className="auth-input"
                 id="auth-email"
                 type="email"
-                placeholder="nume@exemplu.ro"
-                autoComplete="off"
+                placeholder="adresa@email.com"
+                autoComplete="email"
                 inputMode="email"
                 autoCapitalize="none"
                 spellCheck="false"
@@ -322,8 +396,8 @@ export default function HomePage() {
                     className="auth-input"
                     id="auth-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Introdu o parolă fictivă"
-                    autoComplete="off"
+                    placeholder="••••••••"
+                    autoComplete={currentView === "register" ? "new-password" : "current-password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -344,11 +418,6 @@ export default function HomePage() {
                     </svg>
                   </button>
                 </div>
-                {currentView === "register" ? (
-                  <p className="password-hint" id="password-hint">
-                    Pentru acest formular demonstrativ, folosește cel puțin 8 caractere fictive.
-                  </p>
-                ) : null}
               </div>
             ) : null}
 
@@ -359,8 +428,8 @@ export default function HomePage() {
                   className="auth-input"
                   id="auth-confirm"
                   type="password"
-                  placeholder="Repetă parola fictivă"
-                  autoComplete="off"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
@@ -368,14 +437,25 @@ export default function HomePage() {
               </div>
             ) : null}
 
-            <button className="btn auth-submit" type="submit">
-              <span id="auth-submit-label">{views[currentView].submit}</span>
-              <span aria-hidden="true"> →</span>
+            <button className="btn auth-submit" type="submit" disabled={loading}>
+              <span id="auth-submit-label">{loading ? "Se procesează..." : views[currentView].submit}</span>
+              {!loading ? <span aria-hidden="true"> →</span> : null}
             </button>
           </form>
 
           {!statusHidden ? (
-            <p className="auth-status" id="auth-status" role="status" aria-live="polite" aria-atomic="true">
+            <p
+              className="auth-status"
+              id="auth-status"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              style={
+                isError
+                  ? { background: "#fee2e2", borderColor: "#fca5a5", color: "#dc2626" }
+                  : undefined
+              }
+            >
               {statusMessage}
             </p>
           ) : null}
@@ -394,10 +474,6 @@ export default function HomePage() {
               </button>
             </p>
           )}
-
-          <p className="auth-note" id="auth-note">
-            <strong>Interfață demonstrativă.</strong> Folosește doar date fictive. Nu se creează conturi, nu se trimit emailuri și nu sunt salvate datele introduse.
-          </p>
         </div>
       </dialog>
     </main>

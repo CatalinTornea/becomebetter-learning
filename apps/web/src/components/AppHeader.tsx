@@ -12,8 +12,8 @@ import {
 } from "../lib/auth";
 
 const publicLinks = [
-  { href: "/auth/login", label: "Login" },
-  { href: "/auth/signup", label: "Cont nou" }
+  { href: "/?auth=login", label: "Login" },
+  { href: "/?auth=register", label: "Cont nou" }
 ];
 
 const privateLinks = [
@@ -89,6 +89,13 @@ export function AppHeader() {
                       key={link.href}
                       href={link.href}
                       className={isActive(link.href) ? "nav-active" : ""}
+                      onClick={(e) => {
+                        if (pathname === "/") {
+                          e.preventDefault();
+                          const mode = link.href.includes("register") ? "register" : "login";
+                          window.dispatchEvent(new CustomEvent("open-auth", { detail: mode }));
+                        }
+                      }}
                     >
                       {link.label}
                     </Link>
