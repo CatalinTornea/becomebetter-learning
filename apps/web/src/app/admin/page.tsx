@@ -276,7 +276,7 @@ export default function AdminPage() {
       <div className="page-hero">
         <div>
           <p className="course-meta">Admin</p>
-          <h1>Administrare Better Through Practice</h1>
+          <h1>Administrare Beyond Knowing</h1>
           <p>Gestioneaza cursurile si scenariile de practica.</p>
         </div>
         <div className="hero-actions">

@@ -82,7 +82,7 @@ export default function HomePage() {
 
   const views = {
     login: { title: "Autentificare", subtitle: "Conectează-te pentru a continua.", submit: "Intră în platformă" },
-    register: { title: "Creează cont", subtitle: "Începe practica în Better Through Practice.", submit: "Creează cont gratuit" },
+    register: { title: "Creează cont", subtitle: "Începe practica în Beyond Knowing.", submit: "Creează cont gratuit" },
     recover: { title: "Recuperare parolă", subtitle: "Introdu adresa de email asociată contului.", submit: "Trimite linkul de resetare" },
   };
 
@@ -333,7 +333,7 @@ export default function HomePage() {
             </svg>
           </button>
           <div className="auth-heading">
-            <div className="auth-mark" aria-hidden="true">BTP</div>
+            <div className="auth-mark" aria-hidden="true">BK</div>
             <div>
               <h2 id="auth-title" tabIndex={-1}>{views[currentView].title}</h2>
               <p id="auth-subtitle">{views[currentView].subtitle}</p>

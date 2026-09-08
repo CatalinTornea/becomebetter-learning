@@ -3,7 +3,7 @@ import "./globals.css";
 import { AppHeader } from "@/components/AppHeader";
 
 export const metadata = {
-  title: "Better Through Practice – Platforma de antrenament operational",
+  title: "Beyond Knowing – Platforma de antrenament operational",
   description: "Invata prin scenarii realiste, primeste feedback AI si creste vizibil. Platforma de e-learning cu evaluare asistata."
 };
 

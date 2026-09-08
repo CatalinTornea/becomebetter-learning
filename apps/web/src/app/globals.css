@@ -279,11 +279,18 @@ textarea { resize: vertical; }
   width: 36px; height: 36px;
   background: var(--grad-brand);
   border-radius: 10px;
-  font-size: 13px;
-  font-weight: 900;
   color: #fff;
   box-shadow: 0 4px 14px var(--primary-glow);
   flex-shrink: 0;
+}
+
+.brand-symbol {
+  width: 25px;
+  height: 25px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Nav */

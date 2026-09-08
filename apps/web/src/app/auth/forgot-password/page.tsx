@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
           <span className="gradient-text">Îți trimitem un link de resetare.</span>
         </h1>
         <p>
-          Introdu adresa de email asociată contului tău Better Through Practice și îți vom trimite un link securizat valabil 60 de minute.
+          Introdu adresa de email asociată contului tău Beyond Knowing și îți vom trimite un link securizat valabil 60 de minute.
         </p>
 
         <ul className="auth-features">

@@ -77,8 +77,21 @@ export function AppHeader() {
       <header className="site-header" data-scrolled={scrolled}>
         <div className="site-header__inner">
           <Link className="brand" href="/dashboard">
-            <span className="brand-mark">BTP</span>
-            <span>Better Through Practice</span>
+            <span className="brand-mark" aria-hidden="true">
+              <svg
+                className="brand-symbol"
+                viewBox="0 0 32 32"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                focusable="false"
+              >
+                <path d="M7 9.5c3.8 0 6.5 1.1 9 3.3 2.5-2.2 5.2-3.3 9-3.3v13.2c-3.8 0-6.5 1.1-9 3.3-2.5-2.2-5.2-3.3-9-3.3V9.5Z" />
+                <path d="M16 12.8V26" />
+                <path d="M11 18.2c2.6-2.9 5.5-4.4 9.2-4.4" />
+                <path d="m18.2 11.8 2 2-2 2" />
+              </svg>
+            </span>
+            <span>Beyond Knowing</span>
           </Link>
 
           <div className="site-header__right">
