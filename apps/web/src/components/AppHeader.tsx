@@ -131,7 +131,7 @@ export function AppHeader() {
       <style>{`
         .site-header[data-scrolled="true"] {
           background: rgba(255, 255, 255, 0.97);
-          box-shadow: 0 1px 0 rgba(124, 58, 237, 0.10), 0 4px 24px rgba(124, 58, 237, 0.08);
+          box-shadow: 0 1px 0 rgba(201, 35, 50, 0.10), 0 4px 24px rgba(201, 35, 50, 0.08);
         }
         .site-nav a {
           color: #4b5563;
