@@ -1092,7 +1092,7 @@ section.intro { background: white; padding: 100px 0; }
 .intro-title { margin: 0; font-size: clamp(1.4rem, 2.5vw, 2rem); line-height: 1.3; letter-spacing: .015em; font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
 
 section.problems { background: var(--paper); padding: 100px 0; }
-.section-head { display: flex; justify-content: space-between; align-items: end; gap: 30px; margin-bottom: 55px; }
+.section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 30px; margin-bottom: 55px; }
 .section-head p { max-width: 470px; color: var(--muted); margin: 0; }
 .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .card { position: relative; background: var(--paper); padding: 38px 36px 35px; min-height: 230px; transition: .25s; }

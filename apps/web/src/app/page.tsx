@@ -326,7 +326,7 @@ export default function HomePage() {
                     autoComplete="off"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required={currentView !== "recover"}
+                    required
                   />
                   <button
                     className="password-toggle"
