@@ -68,7 +68,7 @@ export default function SignUpPage() {
       {/* Right side – card */}
       <div className="auth-card">
         <div className="auth-card-header">
-          <span className="brand-mark" style={{ width: 42, height: 42, fontSize: 14, borderRadius: 12 }}>BB</span>
+          <span className="brand-mark" style={{ width: 42, height: 42, fontSize: 14, borderRadius: 12 }}>BTP</span>
           <div>
             <h1>Creare cont</h1>
             <p>Înregistrează-te gratuit.</p>

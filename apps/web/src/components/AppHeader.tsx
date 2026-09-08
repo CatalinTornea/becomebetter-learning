@@ -77,8 +77,8 @@ export function AppHeader() {
       <header className="site-header" data-scrolled={scrolled}>
         <div className="site-header__inner">
           <Link className="brand" href="/dashboard">
-            <span className="brand-mark">BB</span>
-            <span>Become Better</span>
+            <span className="brand-mark">BTP</span>
+            <span>Better Through Practice</span>
           </Link>
 
           <div className="site-header__right">

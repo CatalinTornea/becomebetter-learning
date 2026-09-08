@@ -276,7 +276,7 @@ export default function HomePage() {
             </svg>
           </button>
           <div className="auth-heading">
-            <div className="auth-mark" aria-hidden="true">LK</div>
+            <div className="auth-mark" aria-hidden="true">BTP</div>
             <div>
               <h2 id="auth-title" tabIndex={-1}>{views[currentView].title}</h2>
               <p id="auth-subtitle">{views[currentView].subtitle}</p>
