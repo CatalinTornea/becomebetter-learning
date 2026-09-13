@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "start": "prisma migrate deploy && node dist/server.js",
     "lint": "echo \"No linter configured for api\"",
     "test": "vitest run",
     "prisma:generate": "prisma generate",
