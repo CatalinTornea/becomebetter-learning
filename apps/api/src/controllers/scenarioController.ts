@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { getPublicAppSettings } from "../lib/appSettings.js";
 import { prisma } from "../lib/prisma.js";
 import { evaluatePdcaExperiment, gradeScenarioResponse } from "../lib/aiGrader.js";
 
@@ -70,8 +71,9 @@ export async function getScenario(req: Request<ScenarioParams>, res: Response) {
     const isAdmin = req.user?.role === "ADMIN";
 
     if (!isAdmin) {
+      const settings = await getPublicAppSettings();
       const isAdminScenario = scenario.ownerId === null || scenario.owner?.role === "ADMIN";
-      if (isAdminScenario && !scenario.course.showAdminScenarios) {
+      if (isAdminScenario && !settings.showAdminScenarios) {
         return res.status(403).json({ message: "Acest scenariu nu este disponibil." });
       }
       if (scenario.ownerId && scenario.ownerId !== userId && !isAdminScenario) {
@@ -100,6 +102,7 @@ export async function getCourseScenarios(req: Request<CourseScenarioParams>, res
   try {
     const userId = req.user?.id;
     const isAdmin = req.user?.role === "ADMIN";
+    const settings = await getPublicAppSettings();
 
     // Load course to check showAdminScenarios flag
     const course = await prisma.course.findUnique({ where: { id: req.params.courseId } });
@@ -113,7 +116,7 @@ export async function getCourseScenarios(req: Request<CourseScenarioParams>, res
         include: { rubrics: true, owner: { select: { id: true, fullName: true, email: true, role: true } } }
       });
     } else {
-      if (course.showAdminScenarios) {
+      if (settings.showAdminScenarios) {
         // When showAdminScenarios is true, students see admin scenarios + their own scenarios
         scenarios = await prisma.scenario.findMany({
           where: {

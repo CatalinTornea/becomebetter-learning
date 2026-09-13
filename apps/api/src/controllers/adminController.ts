@@ -12,6 +12,7 @@ const createClientUserSchema = z.object({
 });
 
 const appSettingsSchema = z.object({
+  showAdminScenarios: z.boolean().optional(),
   showCoursesPage: z.boolean().optional(),
 });
 

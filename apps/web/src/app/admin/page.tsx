@@ -7,7 +7,7 @@ import { fetchCurrentUser, getCachedUser } from "../../lib/auth";
 type StoredUser = { role: "STUDENT" | "COACH" | "ADMIN"; };
 
 type EvaluationCriteriaGroup = { title: string; items: string[] };
-type AppSettings = { showCoursesPage: boolean };
+type AppSettings = { showAdminScenarios: boolean; showCoursesPage: boolean };
 type ClientUser = {
   id: string;
   email: string;
@@ -36,7 +36,7 @@ export default function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<"success" | "error" | null>(null);
   const [saveNotification, setSaveNotification] = useState<string | null>(null);
-  const [appSettings, setAppSettings] = useState<AppSettings>({ showCoursesPage: true });
+  const [appSettings, setAppSettings] = useState<AppSettings>({ showAdminScenarios: true, showCoursesPage: true });
   const [clientUsers, setClientUsers] = useState<ClientUser[]>([]);
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -250,7 +250,7 @@ export default function AdminPage() {
         body: JSON.stringify(appSettings),
       });
       setAppSettings(updated);
-      const text = updated.showCoursesPage ? "Pagina cu cursuri este vizibilă pe site." : "Pagina cu cursuri este ascunsă pe site.";
+      const text = "Setările de vizibilitate au fost salvate.";
       showMessage(text, "success");
       setSaveNotification(text);
       setTimeout(() => setSaveNotification(null), 3000);
@@ -487,8 +487,8 @@ export default function AdminPage() {
           <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 600, flex: 1, minWidth: "240px" }}>
             Afișează scenariile create de admin pentru toate cursurile din site?
             <select
-              value={courses.every((course) => course.showAdminScenarios) ? "da" : "nu"}
-              onChange={(e) => setCourses((prev) => prev.map((course) => ({ ...course, showAdminScenarios: e.target.value === "da" })))}
+              value={appSettings.showAdminScenarios ? "da" : "nu"}
+              onChange={(e) => setAppSettings((prev) => ({ ...prev, showAdminScenarios: e.target.value === "da" }))}
               style={{ maxWidth: "160px" }}
             >
               <option value="da">Da</option>
@@ -513,16 +513,7 @@ export default function AdminPage() {
               type="button"
               className="button"
               onClick={async () => {
-                const nextValue = courses.every((course) => course.showAdminScenarios);
                 try {
-                  await Promise.all(
-                    courses.map((course) =>
-                      request(`/courses/${course.id}`, {
-                        method: "PATCH",
-                        body: JSON.stringify({ showAdminScenarios: nextValue }),
-                      })
-                    )
-                  );
                   await saveAppSettings();
                 } catch (error) {
                   showMessage(error instanceof Error ? error.message : "Eroare", "error");

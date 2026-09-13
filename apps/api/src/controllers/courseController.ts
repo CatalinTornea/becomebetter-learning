@@ -38,7 +38,7 @@ export async function getCourses(req: Request, res: Response) {
 
   if (!isAdmin) {
     for (const course of courses) {
-      if (course.showAdminScenarios) {
+      if (settings.showAdminScenarios) {
         course.scenarios = course.scenarios.filter((s) => {
           const isAdminScenario = s.ownerId === null || s.owner?.role === "ADMIN";
           const isOwnScenario = Boolean(userId && s.ownerId === userId);
@@ -84,7 +84,7 @@ export async function getCourse(req: Request<CourseParams>, res: Response) {
   }
 
   if (!isAdmin) {
-    if (course.showAdminScenarios) {
+    if (settings.showAdminScenarios) {
       course.scenarios = course.scenarios.filter((s) => {
         const isAdminScenario = s.ownerId === null || s.owner?.role === "ADMIN";
         const isOwnScenario = Boolean(userId && s.ownerId === userId);
