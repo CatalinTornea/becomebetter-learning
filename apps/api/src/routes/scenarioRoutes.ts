@@ -9,6 +9,7 @@ import {
   updateScenario,
   deleteScenario,
   getUserScenarioResponses,
+  evaluatePdcaRow,
 } from "../controllers/scenarioController.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { submitRateLimit } from "../middleware/rateLimit.js";
@@ -26,6 +27,7 @@ scenarioRoutes.get("/course/:courseId", requireAuth, getCourseScenarios);
 
 // Student endpoints
 scenarioRoutes.post("/submit", requireAuth, submitRateLimit, submitScenarioResponse);
+scenarioRoutes.post("/evaluate-pdca", requireAuth, submitRateLimit, evaluatePdcaRow);
 scenarioRoutes.get("/feedback/:responseId", requireAuth, getScenarioFeedback);
 scenarioRoutes.get("/responses", requireAuth, getUserScenarioResponses);
 scenarioRoutes.get("/:scenarioId", requireAuth, getScenario);

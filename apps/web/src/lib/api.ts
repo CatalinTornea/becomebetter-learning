@@ -7,18 +7,44 @@ const getFallbackApiUrl = () => {
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || getFallbackApiUrl();
 
+function requestSignal(timeoutMs: number, externalSignal?: AbortSignal | null) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  return { signal: controller.signal, clear: () => window.clearTimeout(timeoutId) };
+}
+
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers);
+  const { signal, clear } = requestSignal(20000, options.signal);
 
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  return fetch(`${API_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers
-  });
+  try {
+    return await fetch(`${API_URL}${path}`, {
+      ...options,
+      credentials: "include",
+      headers,
+      signal
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Serverul local nu a răspuns. Verifică dacă API-ul rulează și încearcă din nou.");
+    }
+    throw error;
+  } finally {
+    clear();
+  }
 }
 
 export async function apiGet<T>(path: string): Promise<T> {

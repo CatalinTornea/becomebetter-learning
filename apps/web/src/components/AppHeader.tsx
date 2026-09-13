@@ -10,15 +10,15 @@ import {
   getCachedUser,
   logout as logoutRequest
 } from "../lib/auth";
+import { apiGet } from "../lib/api";
 
 const publicLinks = [
-  { href: "/?auth=login", label: "Login" },
-  { href: "/?auth=register", label: "Cont nou" }
+  { href: "/?auth=login", label: "Login" }
 ];
 
 const privateLinks = [
   { href: "/dashboard", label: "Cursuri" },
-  { href: "/practice", label: "Practică" },
+  { href: "/practice", label: "Practică deliberată" },
   { href: "/progress", label: "Analiză" }
 ];
 
@@ -26,6 +26,7 @@ export function AppHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [showCoursesPage, setShowCoursesPage] = useState(true);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -41,9 +42,14 @@ export function AppHeader() {
       try {
         const currentUser = await fetchCurrentUser();
         setUser(currentUser);
+        if (currentUser) {
+          const settings = await apiGet<{ showCoursesPage: boolean }>("/settings").catch(() => null);
+          setShowCoursesPage(currentUser.role === "ADMIN" || settings?.showCoursesPage !== false);
+        }
       } catch {
         clearCachedUser();
         setUser(null);
+        setShowCoursesPage(true);
       }
     }
 
@@ -105,8 +111,7 @@ export function AppHeader() {
                       onClick={(e) => {
                         if (pathname === "/") {
                           e.preventDefault();
-                          const mode = link.href.includes("register") ? "register" : "login";
-                          window.dispatchEvent(new CustomEvent("open-auth", { detail: mode }));
+                          window.dispatchEvent(new CustomEvent("open-auth", { detail: "login" }));
                         }
                       }}
                     >
@@ -115,7 +120,7 @@ export function AppHeader() {
                   ))
                 : null}
               {user
-                ? privateLinks.map((link) => (
+                ? privateLinks.filter((link) => showCoursesPage || link.href !== "/dashboard").map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}

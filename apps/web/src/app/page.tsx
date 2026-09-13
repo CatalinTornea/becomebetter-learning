@@ -10,11 +10,9 @@ export default function HomePage() {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
 
-  const [currentView, setCurrentView] = useState<"login" | "register" | "recover">("login");
-  const [fullName, setFullName] = useState("");
+  const [currentView, setCurrentView] = useState<"login" | "recover">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [statusHidden, setStatusHidden] = useState(true);
@@ -45,13 +43,13 @@ export default function HomePage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const authParam = params.get("auth");
-      if (authParam === "login" || authParam === "register" || authParam === "recover") {
+      if (authParam === "login" || authParam === "recover") {
         openAuthDialog(authParam);
       }
     }
 
     const handleOpenAuth = (e: Event) => {
-      const custom = e as CustomEvent<"login" | "register" | "recover">;
+      const custom = e as CustomEvent<"login" | "recover">;
       if (custom.detail) {
         openAuthDialog(custom.detail);
       }
@@ -60,13 +58,12 @@ export default function HomePage() {
     return () => window.removeEventListener("open-auth", handleOpenAuth);
   }, []);
 
-  const openAuthDialog = (view: "login" | "register" | "recover" = "login") => {
+  const openAuthDialog = (view: "login" | "recover" = "login") => {
     setCurrentView(view);
     setStatusHidden(true);
     setStatusMessage("");
     setIsError(false);
     setPassword("");
-    setConfirmPassword("");
     if (dialogRef.current) {
       dialogRef.current.showModal();
       document.body.classList.add("auth-open");
@@ -82,7 +79,6 @@ export default function HomePage() {
 
   const views = {
     login: { title: "Autentificare", subtitle: "Conectează-te pentru a continua.", submit: "Intră în platformă" },
-    register: { title: "Creează cont", subtitle: "Începe practica în Beyond Knowing.", submit: "Creează cont gratuit" },
     recover: { title: "Recuperare parolă", subtitle: "Introdu adresa de email asociată contului.", submit: "Trimite linkul de resetare" },
   };
 
@@ -94,27 +90,6 @@ export default function HomePage() {
     setIsError(false);
 
     try {
-      if (currentView === "register") {
-        if (password !== confirmPassword) {
-          setIsError(true);
-          setStatusMessage("Parolele nu coincid. Repetă aceeași parolă.");
-          setStatusHidden(false);
-          setLoading(false);
-          return;
-        }
-
-        const payload = await apiJson<{ user: AuthUser }>("/auth/signup", {
-          method: "POST",
-          body: JSON.stringify({ fullName, email, password })
-        });
-
-        cacheUser(payload.user);
-        notifyAuthChanged();
-        closeAuthDialog();
-        router.push("/dashboard");
-        return;
-      }
-
       if (currentView === "login") {
         const payload = await apiJson<{ user: AuthUser }>("/auth/login", {
           method: "POST",
@@ -124,7 +99,13 @@ export default function HomePage() {
         cacheUser(payload.user);
         notifyAuthChanged();
         closeAuthDialog();
-        router.push("/dashboard");
+        if (payload.user.role === "ADMIN") {
+          router.push("/dashboard");
+          return;
+        }
+
+        const settings = await apiJson<{ showCoursesPage: boolean }>("/settings").catch(() => null);
+        router.push(settings?.showCoursesPage === false ? "/practice" : "/dashboard");
         return;
       }
 
@@ -341,23 +322,6 @@ export default function HomePage() {
           </div>
 
           <form id="auth-form" onSubmit={handleSubmit}>
-            {currentView === "register" ? (
-              <div className="auth-field">
-                <div className="label-row"><label htmlFor="auth-name">Nume complet</label></div>
-                <input
-                  className="auth-input"
-                  id="auth-name"
-                  type="text"
-                  placeholder="Ion Ionescu"
-                  autoComplete="name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                  minLength={3}
-                />
-              </div>
-            ) : null}
-
             <div className="auth-field">
               <div className="label-row"><label htmlFor="auth-email">Email</label></div>
               <input
@@ -397,7 +361,7 @@ export default function HomePage() {
                     id="auth-password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    autoComplete={currentView === "register" ? "new-password" : "current-password"}
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -418,22 +382,6 @@ export default function HomePage() {
                     </svg>
                   </button>
                 </div>
-              </div>
-            ) : null}
-
-            {currentView === "register" ? (
-              <div className="auth-field" id="confirm-field">
-                <div className="label-row"><label htmlFor="auth-confirm">Confirmă parola</label></div>
-                <input
-                  className="auth-input"
-                  id="auth-confirm"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
               </div>
             ) : null}
 
@@ -462,10 +410,7 @@ export default function HomePage() {
 
           {currentView === "login" ? (
             <p className="auth-switch" id="login-switch">
-              Nu ai cont?{" "}
-              <button className="text-button" type="button" onClick={() => setCurrentView("register")}>
-                Creează cont gratuit
-              </button>
+              Contul este creat de administrator.
             </p>
           ) : (
             <p className="auth-switch" id="return-switch">

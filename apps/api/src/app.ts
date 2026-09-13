@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/authRoutes.js";
 import { courseRoutes } from "./routes/courseRoutes.js";
 import { scenarioRoutes } from "./routes/scenarioRoutes.js";
 import { adminRoutes } from "./routes/adminRoutes.js";
+import { settingsRoutes } from "./routes/settingsRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { getFrontendOrigins } from "./lib/env.js";
 import path from "path";
@@ -50,5 +51,6 @@ app.use("/auth", authRoutes);
 app.use("/courses", courseRoutes);
 app.use("/scenarios", scenarioRoutes);
 app.use("/admin", adminRoutes);
+app.use("/settings", settingsRoutes);
 
 app.use(errorHandler);

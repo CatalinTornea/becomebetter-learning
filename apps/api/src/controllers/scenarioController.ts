@@ -1,11 +1,45 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { gradeScenarioResponse } from "../lib/aiGrader.js";
+import { evaluatePdcaExperiment, gradeScenarioResponse } from "../lib/aiGrader.js";
 
 const submitScenarioSchema = z.object({
   scenarioId: z.string().uuid(),
   response: z.string().min(10),
+});
+
+const pdcaEvaluationSchema = z.object({
+  projectName: z.string().optional(),
+  currentState: z.string().optional(),
+  futureState: z.string().optional(),
+  outputMetric: z
+    .object({
+      name: z.string().optional(),
+      actual: z.string().optional(),
+      target: z.string().optional(),
+      unit: z.string().optional(),
+    })
+    .optional(),
+  processMetrics: z
+    .array(
+      z.object({
+        name: z.string().optional(),
+        actual: z.string().optional(),
+        target: z.string().optional(),
+        unit: z.string().optional(),
+      })
+    )
+    .optional(),
+  obstacles: z.array(z.string()).optional(),
+  row: z.object({
+    obstacle: z.string().optional(),
+    cause: z.string().optional(),
+    nextStep: z.string().optional(),
+    expected: z.string().optional(),
+    due: z.string().optional(),
+    result: z.string().optional(),
+    learned: z.string().optional(),
+  }),
 });
 
 type ScenarioParams = { scenarioId: string };
@@ -305,6 +339,22 @@ export async function getScenarioFeedback(req: Request<ScenarioFeedbackParams>, 
   } catch (error) {
     console.error("Get feedback error:", error);
     return res.status(500).json({ message: "Failed to fetch feedback" });
+  }
+}
+
+export async function evaluatePdcaRow(req: Request, res: Response) {
+  try {
+    const parsed = pdcaEvaluationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Rândul PDCA trimis nu este valid.", errors: parsed.error.flatten() });
+    }
+
+    const result = await evaluatePdcaExperiment(parsed.data);
+    return res.json(result);
+  } catch (error) {
+    console.error("Evaluate PDCA error:", error);
+    const message = error instanceof Error ? error.message : "Evaluarea PDCA nu a reușit.";
+    return res.status(500).json({ message });
   }
 }
 

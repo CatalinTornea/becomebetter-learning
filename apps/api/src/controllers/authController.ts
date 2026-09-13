@@ -43,6 +43,10 @@ function publicUser(user: { id: string; email: string; fullName: string; role: A
 }
 
 export async function signUp(req: Request, res: Response) {
+  if (process.env.ALLOW_PUBLIC_SIGNUP !== "true") {
+    return res.status(403).json({ message: "Conturile sunt create doar de administrator." });
+  }
+
   const payload = signUpSchema.safeParse(req.body);
   if (!payload.success) {
     return res.status(400).json(payload.error.flatten());

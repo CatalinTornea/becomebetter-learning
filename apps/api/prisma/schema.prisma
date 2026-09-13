@@ -60,6 +60,13 @@ model CourseAttachment {
   createdAt    DateTime @default(now())
 }
 
+model AppSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Scenario practice models - linked directly to Course
 model Scenario {
   id                  String              @id @default(uuid())

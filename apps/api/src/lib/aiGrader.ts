@@ -32,6 +32,56 @@ export interface AIGradingResult {
   generalFeedback: string;
 }
 
+export interface PdcaColumnEvaluation {
+  column: string;
+  score: number;
+  feedback: string;
+}
+
+export interface PdcaEvaluationResult {
+  overallScore: number;
+  columnFeedback: PdcaColumnEvaluation[];
+  generalFeedback: string;
+}
+
+const pdcaKataCriteria = [
+  {
+    column: "Obstacol",
+    standard:
+      "Obstacolul descrie locul sau modul concret în care se pierde ceva în proces față de indicatorul țintă. Trebuie să răspundă la întrebarea: unde credem că pierdem indicatorul țintă astăzi, în starea actuală? Exemple bune: pierdem timp cu așteptarea într-o secvență, pierdem timp prin deplasări inutile, pierdem calitate într-un pas al procesului. Nu accepta soluții mascate, concluzii generale sau formulări care nu indică o pierdere observabilă.",
+  },
+  {
+    column: "Cauză",
+    standard:
+      "Cauza trebuie să explice de ce apare obstacolul și să fie separată clar de obstacol. Caută semne de analiză prin observație directă, date sau întrebări repetate de tip de ce. Penalizează presupunerile, opiniile și confuzia dintre obstacol și cauză.",
+  },
+  {
+    column: "Pasul următor",
+    standard:
+      "Pasul următor trebuie să fie mic, concret și realizabil rapid, ideal până mâine. Trebuie să se încadreze într-unul din cele trei tipuri: du-te și vezi, experiment explorator sau testarea unei ipoteze. Penalizează proiectele mari, pașii pe mai multe săptămâni, schimbările simultane pe mai multe obstacole și formulările vagi.",
+  },
+  {
+    column: "Așteptări",
+    standard:
+      "Așteptările trebuie formulate înainte de experiment și trebuie să poată fi comparate 1:1 cu rezultatul. Pentru du-te și vezi, cursantul ar trebui să spună ce informații se așteaptă să obțină despre procesul actual. Pentru experiment explorator, ar trebui să spună ce informații așteaptă despre obstacolele care blochează starea țintă. Pentru testarea unei ipoteze, ar trebui să existe o predicție concretă, preferabil numerică: pași reduși, mișcări reduse, timp redus, defecte reduse sau alt indicator clar. Penalizează așteptări de tip va fi mai eficient.",
+  },
+  {
+    column: "Până când",
+    standard:
+      "Termenul trebuie să fie o dată clară și scurtă, potrivită pentru un ciclu PDCA rapid. Pasul ar trebui să poată fi făcut până mâine sau foarte curând, ca învățarea să fie rapidă. Penalizează termenele lungi sau lipsa unei date.",
+  },
+  {
+    column: "Rezultat",
+    standard:
+      "Rezultatul trebuie să noteze ce s-a observat direct, nu ce se presupune. Verifică dacă pasul următor s-a realizat exact cum a fost planificat. Dacă s-a realizat diferit, rezultatul trebuie să spună ce a fost diferit. Rezultatul trebuie să fie comparabil 1:1 cu așteptările și să includă o comparație explicită predicție versus realitate.",
+  },
+  {
+    column: "Ce am învățat",
+    standard:
+      "Învățarea trebuie să plece din ce s-a întâmplat efectiv și din diferența dintre predicție și rezultat. Trebuie să arate ce spune experimentul despre sistem, ce a funcționat și poate fi standardizat sau ce nu a funcționat și cere o nouă ipoteză. Penalizează concluziile superficiale de tip lipsă training sau lipsă standard dacă nu explică observația concretă. Un rezultat care nu confirmă ipoteza trebuie tratat ca informație utilă, nu ca eșec.",
+  },
+] as const;
+
 export async function gradeScenarioResponse(
   response: string,
   problemStatement: string,
@@ -139,6 +189,107 @@ Răspunde DOAR în format JSON valid:
       return result;
     } catch (error) {
       console.warn(`[AI Grader] Model ${modelName} failed:`, error instanceof Error ? error.message : error);
+      lastError = error;
+    }
+  }
+
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Eroare evaluare AI (Groq API): ${detail}`);
+}
+
+export async function evaluatePdcaExperiment(input: {
+  projectName?: string;
+  currentState?: string;
+  futureState?: string;
+  outputMetric?: { name?: string; actual?: string; target?: string; unit?: string };
+  processMetrics?: Array<{ name?: string; actual?: string; target?: string; unit?: string }>;
+  obstacles?: string[];
+  row: {
+    obstacle?: string;
+    cause?: string;
+    nextStep?: string;
+    expected?: string;
+    due?: string;
+    result?: string;
+    learned?: string;
+  };
+}): Promise<PdcaEvaluationResult> {
+  if (!apiKey) {
+    throw new Error("Evaluatorul AI nu este configurat. Lipsește GROQ_API_KEY în mediul API.");
+  }
+
+  const criteria = pdcaKataCriteria;
+
+  const prompt = `Ești un Master Coach Toyota Kata. Evaluează un singur rând PDCA completat de cursant, folosind criteriile din fișa PDCA_KATA_Pehart.xlsx.
+Răspunde obligatoriu în limba română și numai cu JSON valid.
+
+Context proiect:
+- Proiect: ${input.projectName || "nespecificat"}
+- Stare actuală: ${input.currentState || "necompletată"}
+- Stare viitoare: ${input.futureState || "necompletată"}
+- Indicator output: ${JSON.stringify(input.outputMetric || {})}
+- Indicatori proces: ${JSON.stringify(input.processMetrics || [])}
+- Obstacole listate: ${JSON.stringify(input.obstacles || [])}
+
+Rând PDCA:
+${JSON.stringify(input.row, null, 2)}
+
+Criterii pe coloane:
+${criteria.map((item) => `- ${item.column}: ${item.standard}`).join("\n")}
+
+Reguli stricte:
+- Evaluează fiecare coloană separat, după criteriul ei.
+- Penalizează explicit săritul la soluții, pașii prea mari, predicția reconstruită după rezultat, opiniile în locul observațiilor, ignorarea surprizelor, combinarea mai multor schimbări și neînchiderea ciclului Check/Act.
+- Nu recompensa texte lungi dacă nu sunt observabile, verificabile și comparabile 1:1.
+- Feedbackul trebuie să spună concret ce este bine și ce trebuie rescris.
+- Returnează feedback pentru toate cele 7 coloane, chiar dacă unele sunt goale.
+
+Format JSON:
+{
+  "overallScore": <număr 0-100>,
+  "columnFeedback": [
+    { "column": "Obstacol", "score": <număr 0-100>, "feedback": "<feedback scurt, practic, în română>" }
+  ],
+  "generalFeedback": "<sinteză scurtă și următorul lucru de îmbunătățit>"
+}`;
+
+  const modelsToTry = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "groq/compound",
+    "qwen/qwen3.6-27b",
+    "llama-3.3-70b-versatile",
+  ];
+
+  let lastError: unknown = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: modelName,
+        response_format: { type: "json_object" },
+      });
+
+      const responseText = chatCompletion.choices[0]?.message?.content || "";
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : responseText) as PdcaEvaluationResult;
+      const receivedFeedback = Array.isArray(parsed.columnFeedback) ? parsed.columnFeedback : [];
+
+      return {
+        overallScore: Math.max(0, Math.min(100, Number(parsed.overallScore) || 0)),
+        columnFeedback: criteria.map((criterion) => {
+          const match = receivedFeedback.find((item) => item.column === criterion.column);
+          return {
+            column: criterion.column,
+            score: Math.max(0, Math.min(100, Number(match?.score) || 0)),
+            feedback: match?.feedback || "Nu am primit feedback pentru această coloană.",
+          };
+        }),
+        generalFeedback: parsed.generalFeedback || "Reia rândul cu un obstacol mai clar, o predicție măsurabilă și o comparație directă rezultat versus așteptare.",
+      };
+    } catch (error) {
+      console.warn(`[PDCA Evaluator] Model ${modelName} failed:`, error instanceof Error ? error.message : error);
       lastError = error;
     }
   }

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import path from "path";
 import { z } from "zod";
+import { getPublicAppSettings } from "../lib/appSettings.js";
 import { prisma } from "../lib/prisma.js";
 
 const evaluationCriteriaItemSchema = z.string().min(1);
@@ -20,6 +21,11 @@ const createCourseSchema = z.object({
 export async function getCourses(req: Request, res: Response) {
   const userId = req.user?.id;
   const isAdmin = req.user?.role === "ADMIN";
+  const settings = await getPublicAppSettings();
+
+  if (!isAdmin && !settings.showCoursesPage) {
+    return res.status(403).json({ message: "Pagina de cursuri nu este disponibilă momentan." });
+  }
 
   const courses = await prisma.course.findMany({
     include: { 
@@ -54,6 +60,11 @@ type CourseParams = { courseId: string };
 export async function getCourse(req: Request<CourseParams>, res: Response) {
   const userId = req.user?.id;
   const isAdmin = req.user?.role === "ADMIN";
+  const settings = await getPublicAppSettings();
+
+  if (!isAdmin && !settings.showCoursesPage) {
+    return res.status(403).json({ message: "Pagina de cursuri nu este disponibilă momentan." });
+  }
 
   const course = await prisma.course.findUnique({
     where: { id: req.params.courseId },

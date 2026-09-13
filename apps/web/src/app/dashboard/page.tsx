@@ -31,6 +31,8 @@ export default function DashboardPage() {
             sessionStorage.removeItem("user");
             window.location.href = "/auth/login";
           }
+        } else if (msg.includes("403")) {
+          window.location.href = "/practice";
         } else {
           setError(msg);
         }

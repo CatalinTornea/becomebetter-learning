@@ -7,6 +7,14 @@ import { fetchCurrentUser, getCachedUser } from "../../lib/auth";
 type StoredUser = { role: "STUDENT" | "COACH" | "ADMIN"; };
 
 type EvaluationCriteriaGroup = { title: string; items: string[] };
+type AppSettings = { showCoursesPage: boolean };
+type ClientUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "STUDENT" | "COACH";
+  createdAt: string;
+};
 
 type Course = { id: string; title: string; description: string; theory?: string; showAdminScenarios: boolean; evaluationCriteria?: EvaluationCriteriaGroup[]; };
 
@@ -28,6 +36,11 @@ export default function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<"success" | "error" | null>(null);
   const [saveNotification, setSaveNotification] = useState<string | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings>({ showCoursesPage: true });
+  const [clientUsers, setClientUsers] = useState<ClientUser[]>([]);
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPassword, setClientPassword] = useState("");
 
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
@@ -55,6 +68,8 @@ export default function AdminPage() {
         setIsAdmin(true);
         setReady(true);
         await loadCourses();
+        await loadAppSettings();
+        await loadClientUsers();
         return;
       }
 
@@ -63,6 +78,8 @@ export default function AdminPage() {
       setReady(true);
       if (user?.role === "ADMIN") {
         await loadCourses();
+        await loadAppSettings();
+        await loadClientUsers();
       }
     }
 
@@ -77,6 +94,24 @@ export default function AdminPage() {
 
   async function loadCourses() {
     try { const data = await request<Course[]>("/courses"); setCourses(data); } catch { showMessage("Nu am putut incarca cursurile.", "error"); }
+  }
+
+  async function loadAppSettings() {
+    try {
+      const data = await request<AppSettings>("/admin/settings");
+      setAppSettings(data);
+    } catch {
+      showMessage("Nu am putut incarca setarile site-ului.", "error");
+    }
+  }
+
+  async function loadClientUsers() {
+    try {
+      const data = await request<ClientUser[]>("/admin/users");
+      setClientUsers(data);
+    } catch {
+      showMessage("Nu am putut incarca utilizatorii.", "error");
+    }
   }
 
   async function loadScenarios(courseId: string) {
@@ -95,6 +130,7 @@ export default function AdminPage() {
     
   }
   function resetScenarioForm() { setScenarioTitle(""); setScenarioProblem(""); setScenarioCoaching(""); setScenarioDifficulty(null); setEditingScenarioId(null); }
+  function resetClientForm() { setClientName(""); setClientEmail(""); setClientPassword(""); }
 
   function updateCriteriaGroup(groupIndex: number, field: "title" | "items", value: string | string[]) {
     setCourseCriteriaGroups((prev) => prev.map((group, index) => {
@@ -185,6 +221,41 @@ export default function AdminPage() {
       showMessage(text, "error");
       setAddScenarioNotification(text);
       setTimeout(() => setAddScenarioNotification(null), 5000);
+    }
+  }
+
+  async function createClientAccount(event: FormEvent) {
+    event.preventDefault();
+    try {
+      await request<ClientUser>("/admin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          fullName: clientName,
+          email: clientEmail,
+          password: clientPassword,
+        }),
+      });
+      showMessage("Contul clientului a fost creat.", "success");
+      resetClientForm();
+      await loadClientUsers();
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Nu am putut crea contul.", "error");
+    }
+  }
+
+  async function saveAppSettings() {
+    try {
+      const updated = await request<AppSettings>("/admin/settings", {
+        method: "PATCH",
+        body: JSON.stringify(appSettings),
+      });
+      setAppSettings(updated);
+      const text = updated.showCoursesPage ? "Pagina cu cursuri este vizibilă pe site." : "Pagina cu cursuri este ascunsă pe site.";
+      showMessage(text, "success");
+      setSaveNotification(text);
+      setTimeout(() => setSaveNotification(null), 3000);
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Nu am putut salva setările site-ului.", "error");
     }
   }
 
@@ -287,6 +358,41 @@ export default function AdminPage() {
 
       {message && <div className={`message ${messageType}`}>{message}</div>}
 
+      <div className="card client-access-card">
+        <div className="client-access-head">
+          <div>
+            <p className="course-meta">Acces privat</p>
+            <h2>Conturi clienți</h2>
+            <p className="muted">Creezi tu contul, apoi îi trimiți clientului emailul și parola.</p>
+          </div>
+          <span className="status-pill done">{clientUsers.length} conturi active</span>
+        </div>
+
+        <div className="admin-grid">
+          <form className="form-grid" onSubmit={createClientAccount}>
+            <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nume client" required minLength={3} />
+            <input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Email client" type="email" required />
+            <input value={clientPassword} onChange={(e) => setClientPassword(e.target.value)} placeholder="Parolă temporară" type="text" required minLength={6} />
+            <button type="submit" disabled={clientName.trim().length < 3 || clientEmail.trim().length < 5 || clientPassword.length < 6}>
+              Creează cont
+            </button>
+          </form>
+
+          <div className="admin-list">
+            {clientUsers.map((user) => (
+              <div className="admin-row" key={user.id}>
+                <div>
+                  <strong>{user.fullName}</strong>
+                  <span>{user.email}</span>
+                </div>
+                <span className="status-pill todo">{user.role === "COACH" ? "Coach" : "Client"}</span>
+              </div>
+            ))}
+            {clientUsers.length === 0 ? <div className="empty-state">Nu există conturi de client încă.</div> : null}
+          </div>
+        </div>
+      </div>
+
       <div className="admin-grid admin-grid--stacked">
         <div className="card">
           <h2>{editingCourseId ? "Editeaza curs" : "Creeaza curs nou"}</h2>
@@ -377,7 +483,7 @@ export default function AdminPage() {
 
       <div className="card" style={{ marginTop: "24px" }}>
         <h3 style={{ margin: "0 0 12px 0", fontSize: "17px", color: "var(--primary-dark)" }}>Setări vizibilitate scenarii admin</h3>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gap: "18px" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 600, flex: 1, minWidth: "240px" }}>
             Afișează scenariile create de admin pentru toate cursurile din site?
             <select
@@ -389,33 +495,45 @@ export default function AdminPage() {
               <option value="nu">Nu</option>
             </select>
           </label>
-          <button
-            type="button"
-            className="button"
-            onClick={async () => {
-              const nextValue = courses.every((course) => course.showAdminScenarios);
-              try {
-                await Promise.all(
-                  courses.map((course) =>
-                    request(`/courses/${course.id}`, {
-                      method: "PATCH",
-                      body: JSON.stringify({ showAdminScenarios: nextValue }),
-                    })
-                  )
-                );
-                const text = nextValue ? "Scenariile adminului sunt vizibile pentru toți elevii." : "Scenariile adminului sunt ascunse pentru toți elevii.";
-                showMessage(text, "success");
-                setSaveNotification(text);
-                setTimeout(() => setSaveNotification(null), 3000);
-              } catch (error) {
-                showMessage(error instanceof Error ? error.message : "Eroare", "error");
-                setSaveNotification("Eroare la salvare");
-                setTimeout(() => setSaveNotification(null), 3000);
-              }
-            }}
-          >
-            Save
-          </button>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 600, flex: 1, minWidth: "240px" }}>
+            Afișează pagina cu cursuri pe site?
+            <select
+              value={appSettings.showCoursesPage ? "da" : "nu"}
+              onChange={(e) => setAppSettings((prev) => ({ ...prev, showCoursesPage: e.target.value === "da" }))}
+              style={{ maxWidth: "200px" }}
+            >
+              <option value="da">Da</option>
+              <option value="nu">Nu</option>
+            </select>
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="button"
+              onClick={async () => {
+                const nextValue = courses.every((course) => course.showAdminScenarios);
+                try {
+                  await Promise.all(
+                    courses.map((course) =>
+                      request(`/courses/${course.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ showAdminScenarios: nextValue }),
+                      })
+                    )
+                  );
+                  await saveAppSettings();
+                } catch (error) {
+                  showMessage(error instanceof Error ? error.message : "Eroare", "error");
+                  setSaveNotification("Eroare la salvare");
+                  setTimeout(() => setSaveNotification(null), 3000);
+                }
+              }}
+            >
+              Save
+            </button>
+          </div>
         </div>
         {saveNotification ? (
           <div style={{ marginTop: 12 }} className="inline-notice success">{saveNotification}</div>
