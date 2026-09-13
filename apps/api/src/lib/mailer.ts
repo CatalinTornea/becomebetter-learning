@@ -114,7 +114,17 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
     }
   }
 
-  // Fallback mode for development/testing when no API key is provided
+  const isLocalDatabase =
+    process.env.DATABASE_URL?.includes("localhost") ||
+    process.env.DATABASE_URL?.includes("127.0.0.1");
+  const allowSimulatedEmails = process.env.ALLOW_SIMULATED_EMAILS === "true" || isLocalDatabase;
+
+  if (!allowSimulatedEmails) {
+    console.error("[Mailer] No email provider configured. Set BREVO_API_KEY or RESEND_API_KEY in production.");
+    return false;
+  }
+
+  // Fallback mode for local development/testing when no API key is provided
   console.log("--------------------------------------------------");
   console.log(`[Mailer] NO API KEY FOUND IN ENV. SIMULATED RESET URL FOR ${email}:`);
   console.log(`[Mailer] RESET URL: ${resetUrl}`);
