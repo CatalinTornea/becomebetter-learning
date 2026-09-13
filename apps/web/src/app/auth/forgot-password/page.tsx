@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
       {/* Right side – card */}
       <div className="auth-card">
         <div className="auth-card-header">
-          <span className="brand-mark" style={{ width: 42, height: 42, fontSize: 14, borderRadius: 12 }}>BB</span>
+          <span className="brand-mark" style={{ width: 42, height: 42, fontSize: 14, borderRadius: 12 }}>BK</span>
           <div>
             <h1>Recuperare parolă</h1>
             <p>Introdu email-ul contului tău.</p>

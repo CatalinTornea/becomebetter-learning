@@ -49,7 +49,7 @@ function getPasswordResetWebUrl() {
     process.env.FRONTEND_URL?.split(",")[0]?.trim();
 
   if (configured) {
-    return configured.replace(/\/$/, "");
+    return configured.replace("becomebetterweb.vercel.app", "beyond-knowing.vercel.app").replace(/\/$/, "");
   }
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";

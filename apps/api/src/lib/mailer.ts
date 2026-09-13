@@ -1,14 +1,14 @@
 function parseEmailFrom(raw?: string | null): { name: string; email: string } {
   if (!raw || !raw.trim()) {
-    return { name: "Become Better", email: "catalintornea24@gmail.com" };
+    return { name: "Beyond Knowing", email: "catalintornea24@gmail.com" };
   }
   const match = raw.trim().match(/^(?:([^<]+)<)?([^>]+)>?$/);
   if (match && match[2]) {
-    const name = (match[1] || "").trim() || "Become Better";
+    const name = (match[1] || "").trim() || "Beyond Knowing";
     const email = match[2].trim();
     return { name, email };
   }
-  return { name: "Become Better", email: raw.trim() };
+  return { name: "Beyond Knowing", email: raw.trim() };
 }
 
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<boolean> {
@@ -16,17 +16,17 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
   const resendApiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
   const rawFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
 
-  const subject = "Resetare parolă Become Better";
+  const subject = "Resetare parolă Beyond Knowing";
   const htmlContent = `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; font-weight: bold; border-radius: 12px; line-height: 48px; font-size: 18px;">BB</div>
+        <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #b91c2b, #c92332); color: #ffffff; font-weight: bold; border-radius: 12px; line-height: 48px; font-size: 18px;">BK</div>
         <h2 style="color: #0f172a; margin-top: 16px; font-size: 22px;">Resetare parolă cont</h2>
       </div>
-      <p style="color: #334155; font-size: 15px; line-height: 1.6;">Ai solicitat resetarea parolei pentru contul tău de pe platforma <strong>Become Better</strong>.</p>
+      <p style="color: #334155; font-size: 15px; line-height: 1.6;">Ai solicitat resetarea parolei pentru contul tău de pe platforma <strong>Beyond Knowing</strong>.</p>
       <p style="color: #334155; font-size: 15px; line-height: 1.6;">Dă click pe butonul de mai jos pentru a-ți seta o nouă parolă. Link-ul este valabil timp de 60 de minute.</p>
       <div style="text-align: center; margin: 32px 0;">
-        <a href="${resetUrl}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-block;">Resetează Parola →</a>
+        <a href="${resetUrl}" style="background: linear-gradient(135deg, #b91c2b, #c92332); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-block;">Resetează Parola →</a>
       </div>
       <p style="color: #64748b; font-size: 13px; line-height: 1.5;">Dacă butonul nu funcționează, poți copia și lipi următorul link în browser:<br/>
         <a href="${resetUrl}" style="color: #6366f1; word-break: break-all;">${resetUrl}</a>
