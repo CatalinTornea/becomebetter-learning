@@ -57,7 +57,7 @@ function getPasswordResetWebUrl() {
     return "http://localhost:3000";
   }
 
-  return "https://becomebetterweb.vercel.app";
+  return "https://beyond-knowing.vercel.app";
 }
 
 export async function signUp(req: Request, res: Response) {
@@ -236,7 +236,7 @@ export async function resetPassword(req: Request, res: Response) {
 
 export async function testEmail(req: Request, res: Response) {
   const targetEmail = String(req.query.email || "catalintornea24@gmail.com").toLowerCase().trim();
-  const testUrl = "https://becomebetterweb.vercel.app/auth/reset-password?token=test-token-123456";
+  const testUrl = "https://beyond-knowing.vercel.app/auth/reset-password?token=test-token-123456";
 
   const brevoApiKey = process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.trim() : null;
   const resendApiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
