@@ -1,14 +1,15 @@
 function parseEmailFrom(raw?: string | null): { name: string; email: string } {
   if (!raw || !raw.trim()) {
-    return { name: "Beyond Knowing", email: "catalintornea24@gmail.com" };
+    return { name: "Beyond Knowing Team", email: "catalintornea24@gmail.com" };
   }
   const match = raw.trim().match(/^(?:([^<]+)<)?([^>]+)>?$/);
   if (match && match[2]) {
-    const name = (match[1] || "").trim() || "Beyond Knowing";
+    const rawName = (match[1] || "").trim();
+    const name = rawName && !rawName.toLowerCase().includes("become better") ? rawName : "Beyond Knowing Team";
     const email = match[2].trim();
     return { name, email };
   }
-  return { name: "Beyond Knowing", email: raw.trim() };
+  return { name: "Beyond Knowing Team", email: raw.trim() };
 }
 
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<boolean> {
@@ -17,6 +18,16 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
   const rawFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
 
   const subject = "Resetare parolă Beyond Knowing";
+  const textContent = [
+    "Resetare parolă Beyond Knowing",
+    "",
+    "Ai solicitat resetarea parolei pentru contul tău de pe platforma Beyond Knowing.",
+    "Link-ul este valabil timp de 60 de minute.",
+    "",
+    `Deschide acest link pentru resetare: ${resetUrl}`,
+    "",
+    "Dacă nu ai solicitat tu această resetare, poți ignora acest email."
+  ].join("\n");
   const htmlContent = `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
       <div style="text-align: center; margin-bottom: 24px;">
@@ -54,7 +65,8 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
           sender: senderObj,
           to: [{ email: email }],
           subject: subject,
-          htmlContent: htmlContent
+          htmlContent: htmlContent,
+          textContent: textContent
         })
       });
 
@@ -84,7 +96,8 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
           from: rawFrom,
           to: [email],
           subject: subject,
-          html: htmlContent
+          html: htmlContent,
+          text: textContent
         })
       });
 
