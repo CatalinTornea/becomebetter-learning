@@ -100,6 +100,8 @@ function ResetPasswordForm() {
                 style={{
                   position: "absolute",
                   right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
                   padding: "4px",
@@ -148,6 +150,8 @@ function ResetPasswordForm() {
                 style={{
                   position: "absolute",
                   right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
                   padding: "4px",

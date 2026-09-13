@@ -110,14 +110,10 @@ export default function HomePage() {
       }
 
       if (currentView === "recover") {
-        try {
-          await apiJson("/auth/forgot-password", {
-            method: "POST",
-            body: JSON.stringify({ email })
-          });
-        } catch {
-          // Handled gracefully
-        }
+        await apiJson("/auth/forgot-password", {
+          method: "POST",
+          body: JSON.stringify({ email })
+        });
         setIsError(false);
         setStatusMessage("Dacă adresa de email există în sistem, a fost trimis un link de resetare.");
         setStatusHidden(false);

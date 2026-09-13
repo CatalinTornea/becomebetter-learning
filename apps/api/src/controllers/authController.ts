@@ -42,6 +42,24 @@ function publicUser(user: { id: string; email: string; fullName: string; role: A
   return { id: user.id, email: user.email, fullName: user.fullName, role: user.role };
 }
 
+function getPasswordResetWebUrl() {
+  const configured =
+    process.env.APP_WEB_URL ||
+    process.env.PUBLIC_WEB_URL ||
+    process.env.FRONTEND_URL?.split(",")[0]?.trim();
+
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  if (apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1")) {
+    return "http://localhost:3000";
+  }
+
+  return "https://becomebetterweb.vercel.app";
+}
+
 export async function signUp(req: Request, res: Response) {
   if (process.env.ALLOW_PUBLIC_SIGNUP !== "true") {
     return res.status(403).json({ message: "Conturile sunt create doar de administrator." });
@@ -173,10 +191,13 @@ export async function forgotPassword(req: Request, res: Response) {
     }
   });
 
-  const webUrl = process.env.APP_WEB_URL || process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:3000";
+  const webUrl = getPasswordResetWebUrl();
   const resetUrl = `${webUrl}/auth/reset-password?token=${token}`;
 
-  await sendPasswordResetEmail(user.email, resetUrl);
+  const sent = await sendPasswordResetEmail(user.email, resetUrl);
+  if (!sent) {
+    return res.status(502).json({ message: "Emailul de resetare nu a putut fi trimis. Verifică setările Brevo/Resend." });
+  }
 
   return res.json({ message: "Dacă adresa de email există în sistem, ai primit un link de resetare." });
 }
