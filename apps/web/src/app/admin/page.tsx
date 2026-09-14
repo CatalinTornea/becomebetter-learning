@@ -368,7 +368,7 @@ export default function AdminPage() {
           <span className="status-pill done">{clientUsers.length} conturi active</span>
         </div>
 
-        <div className="admin-grid">
+        <div className="admin-grid client-access-grid">
           <form className="form-grid" onSubmit={createClientAccount}>
             <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nume client" required minLength={3} />
             <input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Email client" type="email" required />
@@ -378,7 +378,7 @@ export default function AdminPage() {
             </button>
           </form>
 
-          <div className="admin-list">
+          <div className="admin-list client-users-list">
             {clientUsers.map((user) => (
               <div className="admin-row" key={user.id}>
                 <div>
@@ -653,9 +653,42 @@ export default function AdminPage() {
         .file-btn-wrapper { position: relative; display: inline-block; }
         .file-btn-wrapper .button { position: relative; z-index: 1; }
         .file-btn-wrapper .file-input { position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        .client-access-grid {
+          align-items: start;
+          grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1fr);
+        }
+        .client-access-grid .form-grid {
+          align-self: start;
+          margin-top: 0;
+        }
+        .client-users-list {
+          align-content: start;
+          max-height: 460px;
+          overflow-y: auto;
+          padding-right: 6px;
+        }
+        .client-users-list::-webkit-scrollbar {
+          width: 8px;
+        }
+        .client-users-list::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 999px;
+        }
+        .client-users-list::-webkit-scrollbar-track {
+          background: #f8fafc;
+          border-radius: 999px;
+        }
         .admin-grid--stacked { grid-template-columns: 1fr; }
         .inline-notice { padding: 8px 12px; border-radius: 8px; display: inline-block; font-size: 14px; }
         .inline-notice.success { background: rgba(16,185,129,0.08); color: #065f46; border: 1px solid rgba(16,185,129,0.12); }
+        @media (max-width: 860px) {
+          .client-access-grid {
+            grid-template-columns: 1fr;
+          }
+          .client-users-list {
+            max-height: 360px;
+          }
+        }
       `}</style>
     </section>
   );
