@@ -20,6 +20,7 @@ interface RubricScore {
 
 interface StudentScore {
   id: string;
+  type?: "scenario" | "pdca";
   student: Student;
   scenario: {
     id: string;
@@ -121,7 +122,7 @@ export default function AdminScoresPage() {
         <div>
           <p className="course-meta">Admin</p>
           <h1>Scoruri Studenti - Evaluari AI</h1>
-          <p>Vezi toate scorurile obtinute de studenti la scenariile de practica.</p>
+          <p>Vezi toate scorurile obtinute de studenti la scenarii si la evaluarile PDCA.</p>
         </div>
       </div>
 
@@ -220,6 +221,7 @@ export default function AdminScoresPage() {
                 </div>
 
                 <div className="scenario-info">
+                  {score.type === "pdca" ? <span className="score-type-badge">PDCA</span> : <span className="score-type-badge scenario">Scenariu</span>}
                   <p>
                     <strong>Curs:</strong> {score.course.title}
                   </p>
@@ -231,7 +233,7 @@ export default function AdminScoresPage() {
 
                 <div className="student-response">
                   <h4>Raspunsul studentului:</h4>
-                  <p className="response-text">{score.response}</p>
+                  <p className="response-text">{score.response || "Rând PDCA evaluat."}</p>
                   {score.response.length >= 200 && (
                     <button
                       className="secondary-btn view-full-btn"
@@ -319,6 +321,24 @@ export default function AdminScoresPage() {
 
         .scenario-info p {
           margin: 4px 0;
+        }
+
+        .score-type-badge {
+          background: #fff0f2;
+          border: 1px solid rgba(201, 35, 50, 0.18);
+          border-radius: 999px;
+          color: #c92332;
+          display: inline-flex;
+          font-size: 12px;
+          font-weight: 800;
+          margin-bottom: 8px;
+          padding: 4px 10px;
+        }
+
+        .score-type-badge.scenario {
+          background: #f8fafc;
+          border-color: #e2e8f0;
+          color: #64748b;
         }
 
         .student-response {

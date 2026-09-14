@@ -18,7 +18,8 @@ const appSettingsSchema = z.object({
 
 export async function getAllStudentScores(req: Request, res: Response) {
   try {
-    const responses = await prisma.scenarioResponse.findMany({
+    const [responses, pdcaEvaluations] = await Promise.all([
+      prisma.scenarioResponse.findMany({
       where: {
         isGraded: true,
       },
@@ -53,10 +54,27 @@ export async function getAllStudentScores(req: Request, res: Response) {
       orderBy: {
         updatedAt: "desc",
       },
-    });
+      }),
+      prisma.pdcaEvaluation.findMany({
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+          columnScores: true,
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+      }),
+    ]);
 
-    const formatted = responses.map((resp) => ({
+    const formattedScenarios = responses.map((resp) => ({
       id: resp.id,
+      type: "scenario",
       student: {
         id: resp.user.id,
         fullName: resp.user.fullName,
@@ -81,6 +99,58 @@ export async function getAllStudentScores(req: Request, res: Response) {
       })),
       gradedAt: resp.updatedAt,
     }));
+
+    const formattedPdca = pdcaEvaluations.map((evaluation) => {
+      const rowData = evaluation.rowData as {
+        obstacle?: string;
+        cause?: string;
+        nextStep?: string;
+        expected?: string;
+        due?: string;
+        result?: string;
+        learned?: string;
+      };
+
+      return {
+        id: evaluation.id,
+        type: "pdca",
+        student: {
+          id: evaluation.user.id,
+          fullName: evaluation.user.fullName,
+          email: evaluation.user.email,
+        },
+        scenario: {
+          id: "pdca-evaluations",
+          title: `Evaluare PDCA${evaluation.projectName ? ` - ${evaluation.projectName}` : ""}`,
+          difficulty: null,
+        },
+        course: {
+          id: "practice-deliberata",
+          title: "Practică deliberată",
+        },
+        overallScore: evaluation.overallScore,
+        aiEvaluation: evaluation.generalFeedback,
+        response: [
+          rowData.obstacle ? `Obstacol: ${rowData.obstacle}` : "",
+          rowData.cause ? `Cauză: ${rowData.cause}` : "",
+          rowData.nextStep ? `Pasul următor: ${rowData.nextStep}` : "",
+          rowData.expected ? `Așteptări: ${rowData.expected}` : "",
+          rowData.due ? `Până când: ${rowData.due}` : "",
+          rowData.result ? `Rezultat: ${rowData.result}` : "",
+          rowData.learned ? `Ce am învățat: ${rowData.learned}` : "",
+        ].filter(Boolean).join("\n"),
+        rubricScores: evaluation.columnScores.map((score) => ({
+          rubricName: score.column,
+          score: score.score,
+          feedback: score.feedback,
+        })),
+        gradedAt: evaluation.updatedAt,
+      };
+    });
+
+    const formatted = [...formattedScenarios, ...formattedPdca].sort(
+      (a, b) => new Date(b.gradedAt).getTime() - new Date(a.gradedAt).getTime()
+    );
 
     return res.json(formatted);
   } catch (error) {
