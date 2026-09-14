@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiJson } from "../../lib/api";
+import { apiFetch, apiGet, apiJson } from "../../lib/api";
 import { AuthUser, fetchCurrentUser, getCachedUser } from "../../lib/auth";
 
 type Metric = { id: string; name: string; actual: string; target: string; unit: string };
@@ -29,18 +29,31 @@ type KataState = {
   obstacles: Obstacle[];
   pdca: PdcaRow[];
   pdcaDate: string;
+  pdcaAcceptableUseAccepted: boolean;
   measurements: Record<string, Record<string, string>>;
 };
 type ColumnFeedback = { column: string; score: number; feedback: string };
 type PdcaFeedback = {
   rowId: string;
+  rowSignature?: string;
   overallScore: number;
   columnFeedback: ColumnFeedback[];
   generalFeedback: string;
 };
+type SavedPracticeProject = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+type SavedPracticeProjectPayload = SavedPracticeProject & {
+  state: unknown;
+};
 
 const STORAGE_KEY = "beyond-knowing-practica-deliberata-v1";
 const monthKey = today().slice(0, 7);
+const practiceViews = new Set(["tablou", "actuala", "viitoare", "indicatori", "pdca", "obstacole", "grafice"]);
+type PracticeView = "tablou" | "actuala" | "viitoare" | "indicatori" | "pdca" | "obstacole" | "grafice";
 
 const makeId = () =>
   globalThis.crypto?.randomUUID?.() ?? `row-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -70,6 +83,7 @@ const initialState = (): KataState => ({
   obstacles: Array.from({ length: 3 }, blankObstacle),
   pdca: Array.from({ length: 5 }, blankPdca),
   pdcaDate: today(),
+  pdcaAcceptableUseAccepted: false,
   measurements: {},
 });
 
@@ -93,12 +107,44 @@ function parseNumber(value: string) {
   return Number.isFinite(number) ? number : null;
 }
 
+function niceStep(rawStep: number) {
+  if (!Number.isFinite(rawStep) || rawStep <= 0) return 1;
+  const exponent = Math.floor(Math.log10(rawStep));
+  const fraction = rawStep / 10 ** exponent;
+  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
+  return niceFraction * 10 ** exponent;
+}
+
+function chartScale(values: number[]) {
+  const minValue = values.length ? Math.min(...values) : 0;
+  const maxValue = values.length ? Math.max(...values) : 10;
+  const minBase = Math.min(0, minValue);
+  const maxBase = Math.max(10, maxValue);
+  const step = niceStep((maxBase - minBase) / 5);
+  const min = Math.floor(minBase / step) * step;
+  const max = Math.ceil(maxBase / step) * step;
+  const ticks = Array.from({ length: Math.round((max - min) / step) + 1 }, (_, index) => min + index * step);
+  return { min, max, ticks };
+}
+
 function rowHasContent(row: PdcaRow) {
   return Object.entries(row).some(([key, value]) => key !== "id" && value.trim());
 }
 
 function metricHasContent(metric: Metric) {
   return [metric.name, metric.actual, metric.target, metric.unit].some((value) => value.trim());
+}
+
+function pdcaRowSignature(row: PdcaRow) {
+  return JSON.stringify({
+    obstacle: row.obstacle.trim(),
+    cause: row.cause.trim(),
+    nextStep: row.nextStep.trim(),
+    expected: row.expected.trim(),
+    due: row.due.trim(),
+    result: row.result.trim(),
+    learned: row.learned.trim(),
+  });
 }
 
 function safeState(payload: unknown): KataState {
@@ -113,6 +159,10 @@ function safeState(payload: unknown): KataState {
     obstacles: Array.isArray(data.obstacles) && data.obstacles.length ? data.obstacles : fallback.obstacles,
     pdca: Array.isArray(data.pdca) && data.pdca.length ? data.pdca : fallback.pdca,
     pdcaDate: typeof data.pdcaDate === "string" ? data.pdcaDate : fallback.pdcaDate,
+    pdcaAcceptableUseAccepted:
+      typeof data.pdcaAcceptableUseAccepted === "boolean"
+        ? data.pdcaAcceptableUseAccepted
+        : fallback.pdcaAcceptableUseAccepted,
     measurements: data.measurements && typeof data.measurements === "object" ? data.measurements : {},
   };
 }
@@ -123,10 +173,16 @@ function shiftDate(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function viewFromLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get("view");
+  return practiceViews.has(view || "") ? (view as PracticeView) : "tablou";
+}
+
 export default function PracticePage() {
   const router = useRouter();
   const [state, setState] = useState<KataState>(() => initialState());
-  const [activeView, setActiveView] = useState("tablou");
+  const [activeView, setActiveView] = useState<PracticeView>("tablou");
   const [activeMonth, setActiveMonth] = useState(monthKey);
   const [selectedProcessId, setSelectedProcessId] = useState("");
   const [feedback, setFeedback] = useState<Record<string, PdcaFeedback>>({});
@@ -134,6 +190,11 @@ export default function PracticePage() {
   const [message, setMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [savedProjects, setSavedProjects] = useState<SavedPracticeProject[]>([]);
+  const [selectedSavedProjectId, setSelectedSavedProjectId] = useState("");
+  const [currentSavedProjectId, setCurrentSavedProjectId] = useState<string | null>(null);
+  const [projectActionLoading, setProjectActionLoading] = useState(false);
+  const [savedProjectsOpen, setSavedProjectsOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -148,6 +209,19 @@ export default function PracticePage() {
     } else {
       setSelectedProcessId(state.process[0]?.id ?? "");
     }
+  }, []);
+
+  useEffect(() => {
+    setActiveView(viewFromLocation());
+
+    const handlePopState = () => {
+      setActiveView(viewFromLocation());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
   }, []);
 
   useEffect(() => {
@@ -182,6 +256,35 @@ export default function PracticePage() {
   }, [router]);
 
   useEffect(() => {
+    if (!currentUser) return;
+
+    apiGet<SavedPracticeProject[]>("/practice-projects")
+      .then((projects) => {
+        setSavedProjects(projects);
+        setSelectedSavedProjectId((current) => current || projects[0]?.id || "");
+      })
+      .catch(() => {
+        setMessage("Nu am putut încărca proiectele salvate în cont.");
+      });
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!savedProjectsOpen) return;
+
+    const closeMenu = () => setSavedProjectsOpen(false);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSavedProjectsOpen(false);
+    };
+
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [savedProjectsOpen]);
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
@@ -205,6 +308,15 @@ export default function PracticePage() {
     });
   };
 
+  const openPracticeView = (view: PracticeView) => {
+    setActiveView(view);
+    const nextUrl = view === "tablou" ? "/practice" : `/practice?view=${view}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== nextUrl) {
+      window.history.pushState({ practiceView: view }, "", nextUrl);
+    }
+  };
+
   const evaluatePdca = async (row: PdcaRow) => {
     if (!currentUser) {
       setMessage("Autentifică-te pentru a trimite rândul PDCA la AI.");
@@ -214,6 +326,17 @@ export default function PracticePage() {
 
     if (!rowHasContent(row)) {
       setMessage("Completează rândul PDCA înainte de evaluare.");
+      return;
+    }
+
+    if (!state.pdcaAcceptableUseAccepted) {
+      setMessage("Bifează acordul de utilizare responsabilă AI înainte de evaluare.");
+      return;
+    }
+
+    const rowSignature = pdcaRowSignature(row);
+    if (feedback[row.id]?.rowSignature === rowSignature) {
+      setMessage("Feedback-ul AI este deja actual pentru acest rând. Modifică rândul dacă vrei o evaluare nouă.");
       return;
     }
 
@@ -232,7 +355,7 @@ export default function PracticePage() {
           row,
         }),
       });
-      setFeedback((current) => ({ ...current, [row.id]: { ...result, rowId: row.id } }));
+      setFeedback((current) => ({ ...current, [row.id]: { ...result, rowId: row.id, rowSignature } }));
       setMessage("Evaluarea AI a fost generată. Poți modifica rândul și rula din nou.");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Evaluarea AI nu a reușit.";
@@ -248,17 +371,25 @@ export default function PracticePage() {
     const link = document.createElement("a");
     link.href = url;
     link.download = `${state.projectName || "practica-deliberata"}-${today()}.json`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setMessage("Fișierul JSON a fost pregătit pentru descărcare.");
   };
 
   const importProject = async (file: File | null) => {
     if (!file) return;
-    const loaded = safeState(JSON.parse(await file.text()));
-    setState(loaded);
-    setSelectedProcessId(loaded.process[0]?.id ?? "");
-    setFeedback({});
-    setMessage("Proiect deschis cu succes.");
+    try {
+      const loaded = safeState(JSON.parse(await file.text()));
+      setState(loaded);
+      setSelectedProcessId(loaded.process[0]?.id ?? "");
+      setCurrentSavedProjectId(null);
+      setFeedback({});
+      setMessage("Proiect deschis cu succes.");
+    } catch {
+      setMessage("Fișierul selectat nu este un JSON valid pentru proiect.");
+    }
   };
 
   const resetProject = () => {
@@ -266,8 +397,86 @@ export default function PracticePage() {
       const fresh = initialState();
       setState(fresh);
       setSelectedProcessId(fresh.process[0]?.id ?? "");
+      setCurrentSavedProjectId(null);
       setFeedback({});
       setMessage("Proiect resetat.");
+    }
+  };
+
+  const refreshSavedProjects = async (preferredProjectId?: string) => {
+    const projects = await apiGet<SavedPracticeProject[]>("/practice-projects");
+    setSavedProjects(projects);
+    setSelectedSavedProjectId(preferredProjectId || projects[0]?.id || "");
+  };
+
+  const saveProjectToAccount = async () => {
+    if (!currentUser) {
+      setMessage("Autentifică-te pentru a salva proiectul în cont.");
+      router.replace("/?auth=login");
+      return;
+    }
+
+    const name = state.projectName.trim() || `Proiect practică ${today()}`;
+    setProjectActionLoading(true);
+    try {
+      const path = currentSavedProjectId ? `/practice-projects/${currentSavedProjectId}` : "/practice-projects";
+      const method = currentSavedProjectId ? "PUT" : "POST";
+      const saved = await apiJson<SavedPracticeProject>(path, {
+        method,
+        body: JSON.stringify({ name, state }),
+      });
+      setCurrentSavedProjectId(saved.id);
+      await refreshSavedProjects(saved.id);
+      setMessage("Proiect salvat în cont.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nu am putut salva proiectul în cont.");
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
+  const openSavedProject = async () => {
+    if (!selectedSavedProjectId) {
+      setMessage("Alege un proiect salvat din listă.");
+      return;
+    }
+
+    setProjectActionLoading(true);
+    try {
+      const saved = await apiGet<SavedPracticeProjectPayload>(`/practice-projects/${selectedSavedProjectId}`);
+      const loaded = safeState(saved.state);
+      setState(loaded);
+      setSelectedProcessId(loaded.process[0]?.id ?? "");
+      setCurrentSavedProjectId(saved.id);
+      setFeedback({});
+      setMessage(`Proiect deschis: ${saved.name}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nu am putut deschide proiectul salvat.");
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
+  const deleteSavedProject = async () => {
+    if (!selectedSavedProjectId) {
+      setMessage("Alege un proiect salvat din listă.");
+      return;
+    }
+
+    const selectedProject = savedProjects.find((project) => project.id === selectedSavedProjectId);
+    if (!confirm(`Ștergi proiectul salvat "${selectedProject?.name || "selectat"}"?`)) return;
+
+    setProjectActionLoading(true);
+    try {
+      const response = await apiFetch(`/practice-projects/${selectedSavedProjectId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      if (currentSavedProjectId === selectedSavedProjectId) setCurrentSavedProjectId(null);
+      await refreshSavedProjects();
+      setMessage("Proiectul salvat a fost șters.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nu am putut șterge proiectul salvat.");
+    } finally {
+      setProjectActionLoading(false);
     }
   };
 
@@ -326,22 +535,32 @@ export default function PracticePage() {
 
         <div className="kata-hero-right">
           <div className="kata-action-group">
-            <button type="button" className="btn-secondary" onClick={exportProject} title="Exportă starea proiectului ca JSON">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Exportă JSON
-            </button>
-            <label className="btn-secondary file-upload-label" title="Încarcă un proiect salvat din fișier JSON">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Încarcă JSON
-              <input type="file" accept="application/json,.json" hidden onChange={(e) => importProject(e.target.files?.[0] ?? null)} />
-            </label>
-            <button type="button" className="btn-secondary" onClick={() => window.print()} title="Versiune imprimabilă">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              Tipărește
-            </button>
-            <button type="button" className="btn-ghost-danger" onClick={resetProject} title="Resetează formularul la starea inițială">
-              Resetare
-            </button>
+            <div className="kata-action-main">
+              <button type="button" className="btn-secondary" onClick={exportProject} title="Exportă starea proiectului ca JSON">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Exportă JSON
+              </button>
+              <label className="btn-secondary file-upload-label" title="Încarcă un proiect salvat din fișier JSON">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Încarcă JSON
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={(e) => {
+                    void importProject(e.target.files?.[0] ?? null);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <button type="button" className="btn-secondary" onClick={saveProjectToAccount} disabled={projectActionLoading} title="Salvează proiectul în contul tău">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                {currentSavedProjectId ? "Actualizează proiect" : "Salvează în cont"}
+              </button>
+              <button type="button" className="btn-secondary btn-reset-project" onClick={resetProject} title="Resetează formularul la starea inițială">
+                Resetare
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -370,6 +589,61 @@ export default function PracticePage() {
         ) : null}
       </div>
 
+      <div className="saved-projects-card">
+        <div>
+          <strong>Proiecte salvate în cont</strong>
+          <p>Deschide un proiect mai vechi salvat pe site.</p>
+        </div>
+        <div className="saved-projects-actions">
+          <div
+            className={`saved-project-dropdown${savedProjectsOpen ? " open" : ""}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="saved-project-trigger"
+              disabled={projectActionLoading || savedProjects.length === 0}
+              aria-haspopup="listbox"
+              aria-expanded={savedProjectsOpen}
+              onClick={() => setSavedProjectsOpen((open) => !open)}
+            >
+              <span>
+                {savedProjects.find((project) => project.id === selectedSavedProjectId)?.name || "Nu există proiecte salvate"}
+              </span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {savedProjectsOpen ? (
+              <div className="saved-project-menu" role="listbox">
+                {savedProjects.map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    className={`saved-project-option${project.id === selectedSavedProjectId ? " selected" : ""}`}
+                    role="option"
+                    aria-selected={project.id === selectedSavedProjectId}
+                    onClick={() => {
+                      setSelectedSavedProjectId(project.id);
+                      setSavedProjectsOpen(false);
+                    }}
+                  >
+                    <span>{project.name}</span>
+                    <small>Actualizat {new Date(project.updatedAt).toLocaleDateString("ro-RO")}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <button type="button" className="btn-secondary" onClick={openSavedProject} disabled={projectActionLoading || !selectedSavedProjectId}>
+            Deschide
+          </button>
+          <button type="button" className="btn-ghost-danger" onClick={deleteSavedProject} disabled={projectActionLoading || !selectedSavedProjectId}>
+            Șterge
+          </button>
+        </div>
+      </div>
+
       {/* Navigation Tabs Bar */}
       <nav className="kata-tab-bar" aria-label="Meniu Navigare Practică">
         {[
@@ -385,7 +659,7 @@ export default function PracticePage() {
             key={tab.id}
             type="button"
             className={`tab-btn ${activeView === tab.id ? "active" : ""}`}
-            onClick={() => setActiveView(tab.id)}
+            onClick={() => openPracticeView(tab.id as PracticeView)}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d={tab.icon} />
@@ -401,16 +675,10 @@ export default function PracticePage() {
       {/* VIEW: Tablou General (Dashboard) */}
       {activeView === "tablou" ? (
         <div className="kata-board-view">
-          <div className="board-intro-banner">
-            <h3>Modelul Toyota Kata în 5 Pași</h3>
-            <p>Apasă pe oricare dintre cele 5 secțiuni pentru a vizualiza și edita datele procesului tău.</p>
-          </div>
-
           <div className="kata-cards-grid">
-            {/* Step 1 Card: Stare Actuala */}
-            <button type="button" className="kata-step-card" onClick={() => setActiveView("actuala")}>
+            {/* Card: Stare Actuala */}
+            <button type="button" className="kata-step-card" onClick={() => openPracticeView("actuala")}>
               <div className="card-top">
-                <span className="step-num">PASUL 01</span>
                 <span className="card-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/></svg>
                 </span>
@@ -425,10 +693,9 @@ export default function PracticePage() {
               </div>
             </button>
 
-            {/* Step 2 Card: Stare Viitoare */}
-            <button type="button" className="kata-step-card" onClick={() => setActiveView("viitoare")}>
+            {/* Card: Stare Viitoare */}
+            <button type="button" className="kata-step-card" onClick={() => openPracticeView("viitoare")}>
               <div className="card-top">
-                <span className="step-num">PASUL 02</span>
                 <span className="card-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/></svg>
                 </span>
@@ -443,10 +710,9 @@ export default function PracticePage() {
               </div>
             </button>
 
-            {/* Step 3 Card: Indicatori */}
-            <button type="button" className="kata-step-card" onClick={() => setActiveView("indicatori")}>
+            {/* Card: Indicatori */}
+            <button type="button" className="kata-step-card" onClick={() => openPracticeView("indicatori")}>
               <div className="card-top">
-                <span className="step-num">PASUL 03</span>
                 <span className="card-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                 </span>
@@ -461,10 +727,9 @@ export default function PracticePage() {
               </div>
             </button>
 
-            {/* Step 4 Card: PDCA */}
-            <button type="button" className="kata-step-card" onClick={() => setActiveView("pdca")}>
+            {/* Card: PDCA */}
+            <button type="button" className="kata-step-card" onClick={() => openPracticeView("pdca")}>
               <div className="card-top">
-                <span className="step-num">PASUL 04</span>
                 <span className="card-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                 </span>
@@ -479,10 +744,9 @@ export default function PracticePage() {
               </div>
             </button>
 
-            {/* Step 5 Card: Obstacole */}
-            <button type="button" className="kata-step-card" onClick={() => setActiveView("obstacole")}>
+            {/* Card: Obstacole */}
+            <button type="button" className="kata-step-card" onClick={() => openPracticeView("obstacole")}>
               <div className="card-top">
-                <span className="step-num">BANC DE OBSTACOLE</span>
                 <span className="card-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
                 </span>
@@ -497,10 +761,9 @@ export default function PracticePage() {
               </div>
             </button>
 
-            {/* Step 6 Card: Grafice */}
-            <button type="button" className="kata-step-card" onClick={() => setActiveView("grafice")}>
+            {/* Card: Grafice */}
+            <button type="button" className="kata-step-card" onClick={() => openPracticeView("grafice")}>
               <div className="card-top">
-                <span className="step-num">EVOLUȚIE & TREND</span>
                 <span className="card-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"/></svg>
                 </span>
@@ -706,7 +969,7 @@ export default function PracticePage() {
               >
                 + Adaugă indicator de proces
               </button>
-              <button type="button" className="btn-link" onClick={() => setActiveView("grafice")}>
+              <button type="button" className="btn-link" onClick={() => openPracticeView("grafice")}>
                 Deschide graficele de măsurare zilnică →
               </button>
             </div>
@@ -802,12 +1065,14 @@ export default function PracticePage() {
                 type="date"
                 className="date-input"
                 value={state.pdcaDate}
+                disabled={!state.pdcaAcceptableUseAccepted}
                 onChange={(e) => update((curr) => ({ ...curr, pdcaDate: e.target.value }))}
               />
               <button
                 type="button"
                 className="btn-secondary btn-icon"
                 title="Ziua anterioară"
+                disabled={!state.pdcaAcceptableUseAccepted}
                 onClick={() => update((curr) => ({ ...curr, pdcaDate: shiftDate(curr.pdcaDate, -1) }))}
               >
                 ←
@@ -816,6 +1081,7 @@ export default function PracticePage() {
                 type="button"
                 className="btn-secondary btn-icon"
                 title="Ziua următoare"
+                disabled={!state.pdcaAcceptableUseAccepted}
                 onClick={() => update((curr) => ({ ...curr, pdcaDate: shiftDate(curr.pdcaDate, 1) }))}
               >
                 →
@@ -823,7 +1089,33 @@ export default function PracticePage() {
             </div>
           </div>
 
-          <div className="table-responsive pdca-scroll-table">
+          <div className="pdca-acceptable-use">
+            <div className="acceptable-use-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </div>
+            <div className="acceptable-use-content">
+              <h3>Atenție: utilizare responsabilă AI</h3>
+              <p>Înainte de a trimite date pentru evaluarea AI, te rugăm să confirmi următoarele:</p>
+              <ul>
+                <li>AI poate face greșeli și nu înlocuiește judecata umană; verifică rezultatele înainte de folosire.</li>
+                <li>Nu introduce și nu încărca informații sau documente dacă nu ai autorizarea și drepturile necesare.</li>
+                <li>Folosește instrumentul responsabil. Nu îl utiliza pentru a induce în eroare, discrimina sau încălca legi, politici ori proceduri interne.</li>
+              </ul>
+              <label className="acceptable-use-consent">
+                <input
+                  type="checkbox"
+                  checked={state.pdcaAcceptableUseAccepted}
+                  onChange={(e) => update((curr) => ({ ...curr, pdcaAcceptableUseAccepted: e.target.checked }))}
+                />
+                <span>Am citit, înțeleg și sunt de acord cu aceste condiții de utilizare.</span>
+              </label>
+            </div>
+          </div>
+
+          <div className={`table-responsive pdca-scroll-table${state.pdcaAcceptableUseAccepted ? "" : " is-locked"}`}>
             <table className="kata-pdca-table">
               <thead>
                 <tr className="pdca-group-header">
@@ -852,6 +1144,7 @@ export default function PracticePage() {
                         className="pdca-textarea"
                         placeholder="Obstacol extras..."
                         value={row.obstacle}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, obstacle: e.target.value } : item)) }))}
                       />
                     </td>
@@ -860,6 +1153,7 @@ export default function PracticePage() {
                         className="pdca-textarea"
                         placeholder="Cauză directă..."
                         value={row.cause}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, cause: e.target.value } : item)) }))}
                       />
                     </td>
@@ -868,6 +1162,7 @@ export default function PracticePage() {
                         className="pdca-textarea"
                         placeholder="Următorul pas..."
                         value={row.nextStep}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, nextStep: e.target.value } : item)) }))}
                       />
                     </td>
@@ -876,6 +1171,7 @@ export default function PracticePage() {
                         className="pdca-textarea"
                         placeholder="Rezultat așteptat..."
                         value={row.expected}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, expected: e.target.value } : item)) }))}
                       />
                     </td>
@@ -884,6 +1180,7 @@ export default function PracticePage() {
                         type="date"
                         className="pdca-date-cell"
                         value={row.due}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, due: e.target.value } : item)) }))}
                       />
                     </td>
@@ -892,6 +1189,7 @@ export default function PracticePage() {
                         className="pdca-textarea"
                         placeholder="Rezultat măsurat..."
                         value={row.result}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, result: e.target.value } : item)) }))}
                       />
                     </td>
@@ -900,6 +1198,7 @@ export default function PracticePage() {
                         className="pdca-textarea"
                         placeholder="Lecție învățată..."
                         value={row.learned}
+                        disabled={!state.pdcaAcceptableUseAccepted}
                         onChange={(e) => update((curr) => ({ ...curr, pdca: curr.pdca.map((item) => (item.id === row.id ? { ...item, learned: e.target.value } : item)) }))}
                       />
                     </td>
@@ -909,7 +1208,7 @@ export default function PracticePage() {
                         <button
                           type="button"
                           className="btn-ai-eval"
-                          disabled={evaluatingRow === row.id}
+                          disabled={!state.pdcaAcceptableUseAccepted || evaluatingRow === row.id}
                           onClick={() => evaluatePdca(row)}
                         >
                           {evaluatingRow === row.id ? (
@@ -924,6 +1223,7 @@ export default function PracticePage() {
                           type="button"
                           className="icon-delete-btn"
                           title="Șterge rândul PDCA"
+                          disabled={!state.pdcaAcceptableUseAccepted}
                           onClick={() => update((curr) => ({ ...curr, pdca: curr.pdca.filter((item) => item.id !== row.id) }))}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -940,6 +1240,7 @@ export default function PracticePage() {
             <button
               type="button"
               className="btn-primary"
+              disabled={!state.pdcaAcceptableUseAccepted}
               onClick={() => update((curr) => ({ ...curr, pdca: [...curr.pdca, blankPdca()] }))}
             >
               + Adaugă experiment PDCA
@@ -947,6 +1248,7 @@ export default function PracticePage() {
             <button
               type="button"
               className="btn-ghost-danger"
+              disabled={!state.pdcaAcceptableUseAccepted}
               onClick={() => update((curr) => ({ ...curr, pdca: Array.from({ length: 5 }, blankPdca) }))}
             >
               Resetează tabelul PDCA
@@ -1114,8 +1416,7 @@ function ChartSection(props: {
   const numeric = points.filter((point) => point.value !== null) as Array<{ day: number; value: number }>;
   const target = parseNumber(props.metric.target);
   const allNumbers = [...numeric.map((point) => point.value), ...(target === null ? [] : [target])];
-  const min = allNumbers.length ? Math.min(0, ...allNumbers) : 0;
-  const max = allNumbers.length ? Math.max(10, ...allNumbers) : 10;
+  const { min, max, ticks: yTicks } = chartScale(allNumbers);
   const width = 1120;
   const height = 320;
   const left = 62;
@@ -1135,8 +1436,6 @@ function ChartSection(props: {
       },
     }));
   };
-
-  const yTicks = [0, 2, 4, 6, 8, 10];
 
   return (
     <div className="chart-card-box">
@@ -1425,12 +1724,27 @@ const kataStyles = `
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  min-width: 560px;
 }
 
 .kata-action-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.kata-action-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(170px, 1fr));
+  gap: 12px;
+  max-width: 420px;
+  justify-self: end;
+}
+
+.kata-action-main .btn-secondary,
+.kata-action-main .file-upload-label {
+  justify-content: center;
+  min-height: 46px;
 }
 
 .btn-secondary {
@@ -1448,7 +1762,7 @@ const kataStyles = `
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0,0,0,0.03);
 }
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: #fff0f2;
   border-color: #c92332;
   color: #c92332;
@@ -1469,8 +1783,16 @@ const kataStyles = `
   border-radius: 10px;
   cursor: pointer;
 }
-.btn-ghost-danger:hover {
+.btn-ghost-danger:hover:not(:disabled) {
   background: #fee2e2;
+}
+
+.btn-reset-project {
+  justify-content: center;
+  color: #c92332;
+  font-weight: 600;
+  grid-column: 2;
+  grid-row: 2;
 }
 
 /* Project Card */
@@ -1484,6 +1806,155 @@ const kataStyles = `
   justify-content: space-between;
   gap: 20px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+}
+
+.saved-projects-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+}
+
+.saved-projects-card strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.saved-projects-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.saved-projects-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: min(100%, 620px);
+}
+
+.saved-project-dropdown {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+}
+
+.saved-project-trigger {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 12px 8px 16px;
+  color: #c92332;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(15,23,42,0.04);
+  transition: all 0.2s ease;
+}
+
+.saved-project-trigger:hover:not(:disabled),
+.saved-project-dropdown.open .saved-project-trigger {
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148,163,184,0.12);
+}
+
+.saved-project-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-project-trigger svg {
+  flex-shrink: 0;
+  color: #c92332;
+  transition: transform 0.2s ease;
+}
+
+.saved-project-dropdown.open .saved-project-trigger svg {
+  transform: rotate(180deg);
+  color: #c92332;
+}
+
+.saved-project-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.saved-project-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(15,23,42,0.16);
+}
+
+.saved-project-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #c92332;
+  border-radius: 9px;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-project-option:hover {
+  background: #ffffff;
+  color: #c92332;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.saved-project-option.selected {
+  background: #ffffff;
+  color: #c92332;
+  box-shadow: inset 0 0 0 1px #94a3b8;
+}
+
+.saved-project-trigger:hover span,
+.saved-project-trigger:hover svg,
+.saved-project-option:hover span,
+.saved-project-option.selected span {
+  color: #c92332;
+}
+
+.saved-project-option span {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-project-option small {
+  color: #64748b;
+  font-size: 11px;
 }
 
 .project-input-wrapper {
@@ -1604,43 +2075,31 @@ const kataStyles = `
 .kata-board-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.board-intro-banner {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-left: 4px solid #c92332;
-  border-radius: 12px;
-  padding: 16px 20px;
-}
-.board-intro-banner h3 {
-  font-size: 17px;
-  margin: 0 0 4px;
-  color: #0f172a;
-}
-.board-intro-banner p {
-  margin: 0;
-  font-size: 14px;
-  color: #64748b;
+  gap: 0;
 }
 
 .kata-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
 }
 
 .kata-step-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 22px 24px;
-  text-align: left;
+  border: 1px solid #cbd5e1;
+  border-radius: 0;
+  min-height: 132px;
+  padding: 24px 26px;
+  text-align: center;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -1649,7 +2108,7 @@ const kataStyles = `
   word-break: break-word;
   overflow-wrap: anywhere;
   width: 100%;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+  box-shadow: none;
 }
 .kata-step-card * {
   white-space: normal !important;
@@ -1670,9 +2129,8 @@ const kataStyles = `
 }
 
 .kata-step-card:hover {
-  border-color: rgba(201,35,50,0.3);
-  box-shadow: 0 10px 28px rgba(201,35,50,0.09);
-  transform: translateY(-2px);
+  border-color: #c92332;
+  box-shadow: inset 0 0 0 1px #c92332;
 }
 
 .kata-step-card:hover::before {
@@ -1680,51 +2138,43 @@ const kataStyles = `
 }
 
 .card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.step-num {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #94a3b8;
-  text-transform: uppercase;
+  position: absolute;
+  top: 14px;
+  right: 14px;
 }
 
 .card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: transparent;
+  border: none;
+  color: #64748b;
   flex-shrink: 0;
 }
 
 .card-title {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: #0f172a;
-  margin: 4px 0 2px;
+  margin: 0;
   line-height: 1.3;
   display: block;
 }
 
 .card-snippet {
-  font-size: 14px;
+  font-size: 12px;
   color: #64748b;
-  line-height: 1.6;
-  min-height: 48px;
+  line-height: 1.45;
+  min-height: 0;
   margin: 0;
   white-space: normal !important;
   word-break: break-word;
   display: block;
+  max-width: 360px;
 }
 
 .card-footer {
@@ -1736,6 +2186,7 @@ const kataStyles = `
   border-top: 1px solid #f1f5f9;
   width: 100%;
   margin-top: auto;
+  display: none;
 }
 
 .meta-text {
@@ -2020,7 +2471,7 @@ const kataStyles = `
   border-radius: 6px;
   transition: all 0.2s;
 }
-.icon-delete-btn:hover {
+.icon-delete-btn:hover:not(:disabled) {
   background: #fee2e2;
   color: #dc2626;
 }
@@ -2044,7 +2495,7 @@ const kataStyles = `
   transition: all 0.2s ease;
   box-shadow: 0 4px 14px rgba(201,35,50,0.25);
 }
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(201,35,50,0.35);
 }
@@ -2062,6 +2513,10 @@ const kataStyles = `
 /* PDCA Section */
 .pdca-panel-wrap {
   padding: 24px;
+  width: min(100vw - 32px, 1760px);
+  max-width: calc(100vw - 32px);
+  margin-left: 50%;
+  transform: translateX(-50%);
 }
 
 .pdca-date-toolbar {
@@ -2085,14 +2540,108 @@ const kataStyles = `
   justify-content: center;
 }
 
+.pdca-panel-wrap button:disabled,
+.pdca-panel-wrap input:disabled,
+.pdca-panel-wrap textarea:disabled {
+  cursor: not-allowed;
+}
+
+.pdca-panel-wrap .btn-primary:disabled,
+.pdca-panel-wrap .btn-secondary:disabled,
+.pdca-panel-wrap .btn-ghost-danger:disabled,
+.pdca-panel-wrap .icon-delete-btn:disabled {
+  opacity: 0.48;
+  transform: none;
+  box-shadow: none;
+}
+
+.pdca-acceptable-use {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 18px;
+  background: linear-gradient(135deg, #c92332 0%, #9f1d28 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(201,35,50,0.22);
+}
+
+.acceptable-use-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #ffffff;
+  background: rgba(255,255,255,0.12);
+  border-radius: 8px;
+}
+
+.acceptable-use-content h3 {
+  margin: 0 0 8px;
+  font-size: 19px;
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+.acceptable-use-content p {
+  margin: 0 0 10px;
+  color: #dbeafe;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.acceptable-use-content ul {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  color: #eaf2ff;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.acceptable-use-content li + li {
+  margin-top: 4px;
+}
+
+.acceptable-use-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: fit-content;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.acceptable-use-consent input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: #2dbb16;
+  cursor: pointer;
+}
+
 .pdca-scroll-table {
   border-radius: 14px;
+  overflow-x: visible;
+}
+
+.pdca-scroll-table.is-locked {
+  opacity: 0.7;
 }
 
 .kata-pdca-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1280px;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 .pdca-group-header th {
@@ -2112,12 +2661,11 @@ const kataStyles = `
 .pdca-sub-header th {
   background: #f8fafc;
   color: #334155;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 12px 10px;
+  padding: 10px 8px;
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
-  min-width: 130px;
 }
 .pdca-sub-header small {
   display: block;
@@ -2128,7 +2676,7 @@ const kataStyles = `
 }
 
 .kata-pdca-table td {
-  padding: 6px;
+  padding: 5px;
   border-bottom: 1px solid #f1f5f9;
   border-right: 1px solid #f1f5f9;
   vertical-align: top;
@@ -2137,12 +2685,12 @@ const kataStyles = `
 
 .pdca-textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 108px;
   border: 1px solid transparent;
   background: transparent;
-  font-size: 13.5px;
+  font-size: 12.5px;
   line-height: 1.5;
-  padding: 8px;
+  padding: 7px;
   border-radius: 8px;
 }
 .pdca-textarea:hover {
@@ -2153,16 +2701,21 @@ const kataStyles = `
   background: #ffffff;
   border-color: #c92332;
 }
+.pdca-textarea:disabled,
+.pdca-date-cell:disabled {
+  background: #f8fafc;
+  color: #64748b;
+}
 
 .cell-date input {
   min-height: 38px;
-  font-size: 12.5px;
+  font-size: 12px;
   padding: 4px 6px;
   border-radius: 6px;
 }
 
 .cell-ai-action {
-  width: 135px;
+  width: 118px;
 }
 
 .pdca-row-controls {
@@ -2182,9 +2735,9 @@ const kataStyles = `
 .btn-ai-eval {
   background: linear-gradient(135deg, #c92332 0%, #9f1d28 100%);
   color: #ffffff;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 9px 13px;
+  padding: 8px 10px;
   border-radius: 8px;
   border: none;
   cursor: pointer;
@@ -2480,17 +3033,53 @@ const kataStyles = `
   .kata-hero-right {
     align-items: flex-start;
     width: 100%;
+    min-width: 0;
+  }
+  .kata-action-group,
+  .kata-action-main {
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: none;
+  }
+  .kata-action-main {
+    justify-self: stretch;
+  }
+  .btn-reset-project {
+    justify-self: stretch;
   }
   .kata-project-card {
     flex-direction: column;
     align-items: flex-start;
   }
+  .saved-projects-card,
+  .saved-projects-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .saved-projects-actions {
+    min-width: 0;
+    width: 100%;
+  }
+  .saved-project-dropdown {
+    min-width: 0;
+    width: 100%;
+  }
   .output-form-grid {
     grid-template-columns: 1fr;
+  }
+  .kata-cards-grid {
+    grid-template-columns: 1fr;
+    padding: 14px;
   }
   .panel-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .pdca-acceptable-use {
+    grid-template-columns: 1fr;
+  }
+  .acceptable-use-consent {
+    width: 100%;
   }
   .table-footer-actions {
     flex-direction: column;

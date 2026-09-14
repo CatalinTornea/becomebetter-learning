@@ -408,6 +408,8 @@ textarea { resize: vertical; }
 .card h2, .card h3,
 .panel h2, .panel h3 { margin-top: 0; }
 
+.progress-section h2 { margin-bottom: 16px; }
+
 /* ── Page stack ──────────────────────────────────────────── */
 .page-stack { display: grid; gap: 24px; }
 

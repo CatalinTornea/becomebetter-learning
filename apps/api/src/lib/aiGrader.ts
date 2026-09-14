@@ -82,6 +82,64 @@ const pdcaKataCriteria = [
   },
 ] as const;
 
+function startOfLocalDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function evaluateDueDateScore(value?: string) {
+  if (!value?.trim()) {
+    return {
+      score: 0,
+      feedback: "Completează o dată clară pentru termenul experimentului.",
+    };
+  }
+
+  const due = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(due.getTime())) {
+    return {
+      score: 0,
+      feedback: "Termenul nu este o dată validă. Alege o dată clară din calendar.",
+    };
+  }
+
+  const today = startOfLocalDay();
+  const dueDay = startOfLocalDay(due);
+  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+
+  if (diffDays === 0 || diffDays === 1) {
+    return {
+      score: 100,
+      feedback: "Termen foarte bun pentru Toyota Kata: experimentul este planificat pentru azi sau până mâine.",
+    };
+  }
+
+  if (diffDays === 2) {
+    return {
+      score: 90,
+      feedback: "Termen acceptabil și încă rapid, dar idealul Toyota Kata este azi sau până mâine.",
+    };
+  }
+
+  if (diffDays > 2 && diffDays <= 7) {
+    return {
+      score: 70,
+      feedback: "Termenul este clar, dar cam lung pentru un ciclu PDCA rapid. Încearcă să îl reduci la azi sau mâine.",
+    };
+  }
+
+  if (diffDays > 7) {
+    return {
+      score: 40,
+      feedback: "Termenul este prea îndepărtat pentru PDCA Kata. Pasul următor trebuie să producă învățare rapidă.",
+    };
+  }
+
+  return {
+    score: 60,
+    feedback: "Data este în trecut. Dacă experimentul a fost deja făcut, actualizează termenul sau completează rezultatul și învățarea.",
+  };
+}
+
 export async function gradeScenarioResponse(
   response: string,
   problemStatement: string,
@@ -173,6 +231,7 @@ Răspunde DOAR în format JSON valid:
           },
         ],
         model: modelName,
+        temperature: 0,
         response_format: { type: "json_object" },
       });
 
@@ -268,6 +327,7 @@ Format JSON:
       const chatCompletion = await groq.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
         model: modelName,
+        temperature: 0,
         response_format: { type: "json_object" },
       });
 
@@ -276,16 +336,25 @@ Format JSON:
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : responseText) as PdcaEvaluationResult;
       const receivedFeedback = Array.isArray(parsed.columnFeedback) ? parsed.columnFeedback : [];
 
-      return {
-        overallScore: Math.max(0, Math.min(100, Number(parsed.overallScore) || 0)),
-        columnFeedback: criteria.map((criterion) => {
+      const columnFeedback = criteria.map((criterion) => {
+        if (criterion.column === "Până când") {
+          return {
+            column: criterion.column,
+            ...evaluateDueDateScore(input.row.due),
+          };
+        }
+
           const match = receivedFeedback.find((item) => item.column === criterion.column);
           return {
             column: criterion.column,
             score: Math.max(0, Math.min(100, Number(match?.score) || 0)),
             feedback: match?.feedback || "Nu am primit feedback pentru această coloană.",
           };
-        }),
+        });
+
+      return {
+        overallScore: Math.round(columnFeedback.reduce((sum, item) => sum + item.score, 0) / columnFeedback.length),
+        columnFeedback,
         generalFeedback: parsed.generalFeedback || "Reia rândul cu un obstacol mai clar, o predicție măsurabilă și o comparație directă rezultat versus așteptare.",
       };
     } catch (error) {

@@ -6,6 +6,7 @@ import express from "express";
 import { authRoutes } from "./routes/authRoutes.js";
 import { courseRoutes } from "./routes/courseRoutes.js";
 import { scenarioRoutes } from "./routes/scenarioRoutes.js";
+import { practiceProjectRoutes } from "./routes/practiceProjectRoutes.js";
 import { adminRoutes } from "./routes/adminRoutes.js";
 import { settingsRoutes } from "./routes/settingsRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -50,6 +51,7 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/auth", authRoutes);
 app.use("/courses", courseRoutes);
 app.use("/scenarios", scenarioRoutes);
+app.use("/practice-projects", practiceProjectRoutes);
 app.use("/admin", adminRoutes);
 app.use("/settings", settingsRoutes);
 

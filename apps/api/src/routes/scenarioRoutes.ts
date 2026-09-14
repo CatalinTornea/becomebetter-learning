@@ -10,6 +10,7 @@ import {
   deleteScenario,
   getUserScenarioResponses,
   evaluatePdcaRow,
+  getUserPdcaEvaluations,
 } from "../controllers/scenarioController.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { submitRateLimit } from "../middleware/rateLimit.js";
@@ -30,6 +31,7 @@ scenarioRoutes.post("/submit", requireAuth, submitRateLimit, submitScenarioRespo
 scenarioRoutes.post("/evaluate-pdca", requireAuth, submitRateLimit, evaluatePdcaRow);
 scenarioRoutes.get("/feedback/:responseId", requireAuth, getScenarioFeedback);
 scenarioRoutes.get("/responses", requireAuth, getUserScenarioResponses);
+scenarioRoutes.get("/pdca-evaluations", requireAuth, getUserPdcaEvaluations);
 scenarioRoutes.get("/:scenarioId", requireAuth, getScenario);
 
 // Admin update/delete

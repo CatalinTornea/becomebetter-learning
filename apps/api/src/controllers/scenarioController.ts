@@ -43,6 +43,18 @@ const pdcaEvaluationSchema = z.object({
   }),
 });
 
+function pdcaRowSignature(row: z.infer<typeof pdcaEvaluationSchema>["row"]) {
+  return JSON.stringify({
+    obstacle: (row.obstacle || "").trim(),
+    cause: (row.cause || "").trim(),
+    nextStep: (row.nextStep || "").trim(),
+    expected: (row.expected || "").trim(),
+    due: (row.due || "").trim(),
+    result: (row.result || "").trim(),
+    learned: (row.learned || "").trim(),
+  });
+}
+
 type ScenarioParams = { scenarioId: string };
 type CourseScenarioParams = { courseId: string };
 type ScenarioFeedbackParams = { responseId: string };
@@ -348,16 +360,85 @@ export async function getScenarioFeedback(req: Request<ScenarioFeedbackParams>, 
 export async function evaluatePdcaRow(req: Request, res: Response) {
   try {
     const parsed = pdcaEvaluationSchema.safeParse(req.body);
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     if (!parsed.success) {
       return res.status(400).json({ message: "Rândul PDCA trimis nu este valid.", errors: parsed.error.flatten() });
     }
 
     const result = await evaluatePdcaExperiment(parsed.data);
-    return res.json(result);
+    const rowSignature = pdcaRowSignature(parsed.data.row);
+    const saved = await (prisma as any).pdcaEvaluation.upsert({
+      where: {
+        userId_rowSignature: {
+          userId: req.user.id,
+          rowSignature,
+        },
+      },
+      update: {
+        projectName: parsed.data.projectName || null,
+        rowData: parsed.data.row,
+        overallScore: result.overallScore,
+        generalFeedback: result.generalFeedback,
+        columnScores: {
+          deleteMany: {},
+          create: result.columnFeedback.map((item) => ({
+            column: item.column,
+            score: item.score,
+            feedback: item.feedback,
+          })),
+        },
+      },
+      create: {
+        userId: req.user.id,
+        projectName: parsed.data.projectName || null,
+        rowSignature,
+        rowData: parsed.data.row,
+        overallScore: result.overallScore,
+        generalFeedback: result.generalFeedback,
+        columnScores: {
+          create: result.columnFeedback.map((item) => ({
+            column: item.column,
+            score: item.score,
+            feedback: item.feedback,
+          })),
+        },
+      },
+      include: {
+        columnScores: true,
+      },
+    });
+
+    return res.json({ ...result, evaluationId: saved.id, savedAt: saved.updatedAt });
   } catch (error) {
     console.error("Evaluate PDCA error:", error);
     const message = error instanceof Error ? error.message : "Evaluarea PDCA nu a reușit.";
     return res.status(500).json({ message });
+  }
+}
+
+export async function getUserPdcaEvaluations(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const evaluations = await (prisma as any).pdcaEvaluation.findMany({
+      where: { userId },
+      include: {
+        columnScores: {
+          orderBy: { column: "asc" },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return res.json(evaluations);
+  } catch (error) {
+    console.error("Get user PDCA evaluations error:", error);
+    return res.status(500).json({ message: "Failed to fetch PDCA evaluations" });
   }
 }
 
