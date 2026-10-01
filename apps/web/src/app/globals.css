@@ -1153,11 +1153,14 @@ body.auth-open { overflow: hidden; }
 .password-wrap { position: relative; }
 .password-wrap .auth-input { padding-right: 62px; }
 .password-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); box-shadow: none; }
-.password-toggle:hover, .password-toggle:focus-visible { background: var(--red-soft); color: var(--red-strong); transform: translateY(-50%); box-shadow: none; }
+.auth-dialog .password-toggle { transition: background-color .2s, color .2s; }
+.auth-dialog .password-toggle:hover:not(:disabled), .auth-dialog .password-toggle:focus-visible, .auth-dialog .password-toggle:active:not(:disabled) { background: var(--red-soft); color: var(--red-strong); transform: translateY(-50%); box-shadow: none; }
 .password-toggle .eye-slash { display: none; }
 .password-toggle[aria-pressed="true"] .eye-slash { display: block; }
 .text-button { padding: 5px 0; border: 0; background: transparent; color: var(--red-strong); font-size: 1rem; font-weight: 650; line-height: 1.5; text-underline-offset: 4px; }
-.text-button:hover { text-decoration: underline; }
+.auth-dialog .text-button { transition: color .2s; }
+.auth-dialog .text-button:hover:not(:disabled), .auth-dialog .text-button:focus-visible, .auth-dialog .text-button:active:not(:disabled) { background: transparent; color: var(--red-strong); transform: none; box-shadow: none; text-decoration: underline; }
+.auth-dialog .text-button::after, .auth-dialog .password-toggle::after { content: none; }
 .password-hint { margin: 8px 0 0; color: var(--muted); font-size: .875rem; line-height: 1.5; }
 .auth-submit { width: 100%; margin-top: 4px; padding: 15px 18px; border-radius: 12px; background: linear-gradient(100deg, var(--red-strong), #c92332); font-size: 1.0625rem; line-height: 1.45; box-shadow: 0 8px 20px rgba(201, 35, 50, .13); }
 .auth-submit:hover { background: linear-gradient(100deg, #9f1d28, var(--red-strong)); }
