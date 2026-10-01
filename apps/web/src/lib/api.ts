@@ -22,7 +22,7 @@ function requestSignal(timeoutMs: number, externalSignal?: AbortSignal | null) {
   return { signal: controller.signal, clear: () => window.clearTimeout(timeoutId) };
 }
 
-export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+async function fetchOnce(path: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers);
   const { signal, clear } = requestSignal(20000, options.signal);
 
@@ -47,11 +47,34 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   }
 }
 
+let sessionRefresh: Promise<Response> | null = null;
+
+export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const response = await fetchOnce(path, options);
+  if (response.status !== 401 || (path.startsWith("/auth/") && path !== "/auth/me")) {
+    return response;
+  }
+
+  // Share one refresh across requests that encounter an expired session together.
+  if (!sessionRefresh) {
+    sessionRefresh = fetchOnce("/auth/refresh", { method: "POST" }).finally(() => {
+      sessionRefresh = null;
+    });
+  }
+
+  const refreshed = await sessionRefresh;
+  if (!refreshed.ok) return response;
+
+  return fetchOnce(path, options);
+}
+
+const SESSION_EXPIRED_MESSAGE = "Sesiunea a expirat. Autentific\u0103-te din nou; datele proiectului r\u0103m\u00e2n \u00een pagin\u0103.";
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await apiFetch(path);
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(response.status === 401 ? SESSION_EXPIRED_MESSAGE : `Request failed: ${response.status}`);
   }
 
   return (await response.json()) as T;
@@ -66,6 +89,9 @@ export async function apiJson<T>(path: string, options: RequestInit = {}): Promi
       payload && typeof payload === "object" && "message" in payload
         ? String(payload.message)
         : `Request failed: ${response.status}`;
+    if (response.status === 401 && (message === "Missing token" || message === "Invalid token")) {
+      throw new Error(SESSION_EXPIRED_MESSAGE);
+    }
     throw new Error(message);
   }
 
