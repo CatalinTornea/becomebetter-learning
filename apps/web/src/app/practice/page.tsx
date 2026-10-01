@@ -409,7 +409,7 @@ export default function PracticePage() {
     setSelectedSavedProjectId(preferredProjectId || projects[0]?.id || "");
   };
 
-  const saveProjectToAccount = async () => {
+  const saveProjectToAccount = async (mode: "update" | "create" = "update") => {
     if (!currentUser) {
       setMessage("Autentifică-te pentru a salva proiectul în cont.");
       router.replace("/?auth=login");
@@ -417,17 +417,18 @@ export default function PracticePage() {
     }
 
     const name = state.projectName.trim() || `Proiect practică ${today()}`;
+    const shouldUpdateExisting = mode === "update" && currentSavedProjectId;
     setProjectActionLoading(true);
     try {
-      const path = currentSavedProjectId ? `/practice-projects/${currentSavedProjectId}` : "/practice-projects";
-      const method = currentSavedProjectId ? "PUT" : "POST";
+      const path = shouldUpdateExisting ? `/practice-projects/${currentSavedProjectId}` : "/practice-projects";
+      const method = shouldUpdateExisting ? "PUT" : "POST";
       const saved = await apiJson<SavedPracticeProject>(path, {
         method,
         body: JSON.stringify({ name, state }),
       });
       setCurrentSavedProjectId(saved.id);
       await refreshSavedProjects(saved.id);
-      setMessage("Proiect salvat în cont.");
+      setMessage(shouldUpdateExisting ? "Proiect actualizat în cont." : "Proiect salvat ca proiect nou în cont.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Nu am putut salva proiectul în cont.");
     } finally {
@@ -553,10 +554,16 @@ export default function PracticePage() {
                   }}
                 />
               </label>
-              <button type="button" className="btn-secondary" onClick={saveProjectToAccount} disabled={projectActionLoading} title="Salvează proiectul în contul tău">
+              <button type="button" className="btn-secondary" onClick={() => void saveProjectToAccount("update")} disabled={projectActionLoading} title="Salvează modificările proiectului deschis în contul tău">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 {currentSavedProjectId ? "Actualizează proiect" : "Salvează în cont"}
               </button>
+              {currentSavedProjectId ? (
+                <button type="button" className="btn-secondary" onClick={() => void saveProjectToAccount("create")} disabled={projectActionLoading} title="Creează o copie separată în lista de proiecte salvate">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Salvează ca proiect nou
+                </button>
+              ) : null}
               <button type="button" className="btn-secondary btn-reset-project" onClick={resetProject} title="Resetează formularul la starea inițială">
                 Resetare
               </button>
@@ -1791,8 +1798,6 @@ const kataStyles = `
   justify-content: center;
   color: #c92332;
   font-weight: 600;
-  grid-column: 2;
-  grid-row: 2;
 }
 
 /* Project Card */
